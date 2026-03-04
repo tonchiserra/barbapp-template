@@ -92,7 +92,7 @@ export function VideoSettingsForm({ initialSettings }: VideoSettingsProps) {
           <Input
             name="title"
             label="Titulo"
-            placeholder="Ej: Conoce nuestra barberia"
+            placeholder="Ej: Conoce nuestro negocio"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />

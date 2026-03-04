@@ -112,7 +112,7 @@ export function HeaderSettingsForm({ userId, initialSettings }: HeaderSettingsPr
             Logo
           </Heading>
           <Text size="sm" variant="muted">
-            Como se muestra el logo de tu barberia
+            Como se muestra el logo de tu negocio
           </Text>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -141,7 +141,7 @@ export function HeaderSettingsForm({ userId, initialSettings }: HeaderSettingsPr
             <Input
               name="logo_text"
               label="Nombre del sitio"
-              placeholder="Mi Barberia"
+              placeholder="Ej: Mi Negocio"
               value={logoText}
               onChange={(e) => setLogoText(e.target.value)}
               required

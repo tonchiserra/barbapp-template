@@ -53,7 +53,7 @@ export function Header({ settings, className }: HeaderProps) {
             />
           ) : (
             <span className="text-xl font-bold tracking-tight text-foreground">
-              {settings.logo_text || "Mi Barberia"}
+              {settings.logo_text || "Mi negocio"}
             </span>
           )}
         </div>

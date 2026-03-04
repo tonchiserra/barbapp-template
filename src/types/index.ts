@@ -266,7 +266,7 @@ export interface SiteSettings {
 
 export const DEFAULT_HEADER_SETTINGS: HeaderSettings = {
   logo_type: "text",
-  logo_text: "Mi Barberia",
+  logo_text: "Mi negocio",
   logo_image_url: "",
   menu_links: [],
   social_links: {
@@ -389,12 +389,12 @@ export const SOCIAL_PLATFORMS: {
   label: string;
   placeholder: string;
 }[] = [
-  { key: "instagram", label: "Instagram", placeholder: "https://instagram.com/tu_barberia" },
-  { key: "facebook", label: "Facebook", placeholder: "https://facebook.com/tu_barberia" },
-  { key: "tiktok", label: "TikTok", placeholder: "https://tiktok.com/@tu_barberia" },
+  { key: "instagram", label: "Instagram", placeholder: "https://instagram.com/tu_negocio" },
+  { key: "facebook", label: "Facebook", placeholder: "https://facebook.com/tu_negocio" },
+  { key: "tiktok", label: "TikTok", placeholder: "https://tiktok.com/@tu_negocio" },
   { key: "whatsapp", label: "WhatsApp", placeholder: "https://wa.me/5491100000000" },
-  { key: "x", label: "X (Twitter)", placeholder: "https://x.com/tu_barberia" },
-  { key: "youtube", label: "YouTube", placeholder: "https://youtube.com/@tu_barberia" },
-  { key: "telegram", label: "Telegram", placeholder: "https://t.me/tu_barberia" },
-  { key: "email", label: "Email", placeholder: "tu@barberia.com" },
+  { key: "x", label: "X (Twitter)", placeholder: "https://x.com/tu_negocio" },
+  { key: "youtube", label: "YouTube", placeholder: "https://youtube.com/@tu_negocio" },
+  { key: "telegram", label: "Telegram", placeholder: "https://t.me/tu_negocio" },
+  { key: "email", label: "Email", placeholder: "tu@negocio.com" },
 ];

@@ -108,14 +108,14 @@ function StaffList({ staff, onSelect }: { staff: StaffMember[]; onSelect: (id: s
       )}
 
       <Button variant="outline" onClick={() => setIsCreateOpen(true)}>
-        + Agregar barbero
+        + Agregar empleado
       </Button>
 
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Nuevo empleado</DialogTitle>
-            <DialogDescription>Agrega un barbero o empleado a tu equipo.</DialogDescription>
+            <DialogDescription>Agrega un empleado a tu equipo.</DialogDescription>
           </DialogHeader>
           <StaffCreateForm onSubmit={handleCreate} pending={pending} />
         </DialogContent>

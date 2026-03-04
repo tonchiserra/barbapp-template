@@ -188,10 +188,10 @@ export default function UIKitPage() {
                 <SelectValue placeholder="Selecciona un servicio" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="corte">Corte de pelo</SelectItem>
-                <SelectItem value="barba">Arreglo de barba</SelectItem>
-                <SelectItem value="combo">Corte + Barba</SelectItem>
-                <SelectItem value="color">Coloracion</SelectItem>
+                <SelectItem value="servicio_1">Servicio 1</SelectItem>
+                <SelectItem value="servicio_2">Servicio 2</SelectItem>
+                <SelectItem value="servicio_3">Servicio 3</SelectItem>
+                <SelectItem value="servicio_4">Servicio 4</SelectItem>
               </SelectContent>
             </Select>
           </Row>
@@ -214,35 +214,35 @@ export default function UIKitPage() {
           <div className="grid gap-6 sm:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Corte clasico</CardTitle>
+                <CardTitle>Titulo</CardTitle>
                 <CardDescription>
-                  Corte tradicional con tijera y maquina
+                  Esto es un texto de ejemplo
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Text size="sm" variant="muted">
-                  Duracion estimada: 30 min
+                  Esto es un texto de ejemplo
                 </Text>
               </CardContent>
               <CardFooter>
-                <Button size="sm">Reservar</Button>
+                <Button size="sm">Ejemplo</Button>
               </CardFooter>
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Arreglo de barba</CardTitle>
+                <CardTitle>Título</CardTitle>
                 <CardDescription>
-                  Perfilado y recorte profesional
+                  Esto es un texto de ejemplo
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Text size="sm" variant="muted">
-                  Duracion estimada: 20 min
+                  Esto es un texto de ejemplo
                 </Text>
               </CardContent>
               <CardFooter>
                 <Button size="sm" variant="outline">
-                  Reservar
+                  Ejemplo
                 </Button>
               </CardFooter>
             </Card>

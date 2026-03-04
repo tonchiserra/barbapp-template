@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Barbapp",
-  description: "Plataforma para barberos y peluqueros",
+  title: "Turnos",
+  description: "Sistema de turnos para la atención al cliente",
 };
 
 export default function RootLayout({
