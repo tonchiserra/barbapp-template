@@ -1,28 +1,38 @@
 "use client";
 
 import * as React from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { format as fnsFormat, subMonths } from "date-fns";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import {
-  Heading, Text, Input, Textarea, Switch, Button, Badge,
-  Card, CardHeader, CardTitle, CardContent, CardFooter,
+  Heading, Text, Button, Badge,
+  Card, CardHeader, CardTitle, CardContent,
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   useToast,
 } from "@/components/ui";
-import { saveBookingSettings, updateAppointmentStatus } from "../turnero-actions";
-import type { BookingSettings, AppointmentWithDetails, AppointmentStatus } from "@/types";
+import { updateAppointmentStatus } from "../turnero-actions";
+import type { AppointmentWithDetails, AppointmentStatus } from "@/types";
 
 interface BookingDashboardProps {
-  bookingSettings: BookingSettings;
   todayAppointments: AppointmentWithDetails[];
   nextAppointment: AppointmentWithDetails | null;
   weekCount: number;
   monthCount: number;
   monthRevenue: number;
+  weekRevenue: number;
+  prevWeekRevenue: number;
+  prevMonthRevenue: number;
+  historicalMonth: string | null;
+  historicalLabel: string | null;
+  historicalRevenue: number | null;
+  historicalCount: number | null;
+  historicalCompletedCount: number | null;
 }
 
 // ---------------------------------------------------------------------------
-// Status helpers
+// Helpers
 // ---------------------------------------------------------------------------
 
 const STATUS_LABELS: Record<AppointmentStatus, string> = {
@@ -39,94 +49,49 @@ const STATUS_VARIANTS: Record<AppointmentStatus, "default" | "secondary" | "dest
   no_show: "outline",
 };
 
+function calcPercentDiff(current: number, previous: number): number {
+  if (previous === 0) return current > 0 ? 100 : 0;
+  return ((current - previous) / previous) * 100;
+}
+
+function formatARS(amount: number): string {
+  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 0 }).format(amount);
+}
+
 // ---------------------------------------------------------------------------
-// Metrics cards
+// Metrics card
 // ---------------------------------------------------------------------------
 
-function MetricCard({ label, value }: { label: string; value: string | number }) {
+function MetricCard({ label, value, percentDiff }: { label: string; value: string | number; percentDiff?: number | null }) {
   return (
     <Card>
       <CardContent className="p-4">
         <Text size="sm" variant="muted">{label}</Text>
         <Heading as="h3" className="mt-1 text-2xl">{value}</Heading>
+        {percentDiff != null && (
+          <div className={cn(
+            "mt-1.5 flex items-center gap-1 text-xs font-medium",
+            percentDiff > 0 && "text-emerald-600",
+            percentDiff < 0 && "text-red-500",
+            percentDiff === 0 && "text-muted-foreground",
+          )}>
+            {percentDiff > 0 ? (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                <path d="m18 15-6-6-6 6" />
+              </svg>
+            ) : percentDiff < 0 ? (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            ) : null}
+            <span>
+              {percentDiff === 0
+                ? "Sin cambios"
+                : `${percentDiff > 0 ? "+" : ""}${percentDiff.toFixed(0)}% vs anterior`}
+            </span>
+          </div>
+        )}
       </CardContent>
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Settings form
-// ---------------------------------------------------------------------------
-
-function SettingsForm({ settings }: { settings: BookingSettings }) {
-  const { toast } = useToast();
-  const [pending, setPending] = React.useState(false);
-  const [title, setTitle] = React.useState(settings.title);
-  const [description, setDescription] = React.useState(settings.description);
-  const [advanceDays, setAdvanceDays] = React.useState(String(settings.advance_days));
-  const [minAdvanceHours, setMinAdvanceHours] = React.useState(String(settings.min_advance_hours));
-  const [isVisible, setIsVisible] = React.useState(settings.is_visible);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPending(true);
-
-    const fd = new FormData();
-    fd.set("title", title);
-    fd.set("description", description);
-    fd.set("advance_days", advanceDays);
-    fd.set("min_advance_hours", minAdvanceHours);
-    if (isVisible) fd.set("is_visible", "on");
-
-    const result = await saveBookingSettings(null, fd);
-    setPending(false);
-
-    if (result.error) {
-      toast(result.error, "error");
-    } else {
-      toast("Configuracion guardada", "success");
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Configuracion del turnero</CardTitle>
-      </CardHeader>
-      <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
-          <div>
-            <Text size="sm" className="mb-1.5 font-medium">Titulo</Text>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Reserva tu turno" />
-          </div>
-          <div>
-            <Text size="sm" className="mb-1.5 font-medium">Descripcion</Text>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Texto opcional debajo del titulo" rows={2} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Text size="sm" className="mb-1.5 font-medium">Dias de anticipacion</Text>
-              <Input type="number" min="1" max="365" value={advanceDays} onChange={(e) => setAdvanceDays(e.target.value)} />
-            </div>
-            <div>
-              <Text size="sm" className="mb-1.5 font-medium">Horas minimas de anticipacion</Text>
-              <Input type="number" min="0" max="72" value={minAdvanceHours} onChange={(e) => setMinAdvanceHours(e.target.value)} />
-            </div>
-          </div>
-          <div className="flex items-center justify-between rounded-xl border px-4 py-3">
-            <div>
-              <Text size="sm" className="font-medium">Visible en la landing</Text>
-              <Text size="sm" variant="muted">Mostrar el widget de reservas en tu pagina</Text>
-            </div>
-            <Switch checked={isVisible} onCheckedChange={setIsVisible} />
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button type="submit" disabled={pending}>
-            {pending ? "Guardando..." : "Guardar configuracion"}
-          </Button>
-        </CardFooter>
-      </form>
     </Card>
   );
 }
@@ -243,30 +208,96 @@ function AppointmentRow({ appointment }: { appointment: AppointmentWithDetails }
 // ---------------------------------------------------------------------------
 
 export function BookingDashboard({
-  bookingSettings,
   todayAppointments,
   nextAppointment,
   weekCount,
   monthCount,
   monthRevenue,
+  weekRevenue,
+  prevWeekRevenue,
+  prevMonthRevenue,
+  historicalMonth,
+  historicalLabel,
+  historicalRevenue,
+  historicalCount,
+  historicalCompletedCount,
 }: BookingDashboardProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const todayCount = todayAppointments.length;
-  const formattedRevenue = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 0 }).format(monthRevenue);
+
+  const monthOptions = React.useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 12 }, (_, i) => {
+      const date = subMonths(now, i);
+      return {
+        value: fnsFormat(date, "yyyy-MM"),
+        label: fnsFormat(date, "MMMM yyyy", { locale: es }),
+      };
+    });
+  }, []);
+
+  const handleMonthChange = (value: string) => {
+    router.push(`${pathname}?mes=${value}`);
+  };
 
   return (
     <div className="space-y-8">
-      {/* Settings */}
-      <SettingsForm settings={bookingSettings} />
-
       {/* Metrics */}
       <div>
         <Heading as="h2" className="mb-4 text-lg">Metricas</Heading>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-3 gap-3">
           <MetricCard label="Turnos hoy" value={todayCount} />
           <MetricCard label="Esta semana" value={weekCount} />
           <MetricCard label="Este mes" value={monthCount} />
-          <MetricCard label="Ingresos del mes" value={formattedRevenue} />
         </div>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <MetricCard
+            label="Ingresos semana"
+            value={formatARS(weekRevenue)}
+            percentDiff={calcPercentDiff(weekRevenue, prevWeekRevenue)}
+          />
+          <MetricCard
+            label="Ingresos del mes"
+            value={formatARS(monthRevenue)}
+            percentDiff={calcPercentDiff(monthRevenue, prevMonthRevenue)}
+          />
+        </div>
+      </div>
+
+      {/* Historical */}
+      <div>
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <Heading as="h2" className="text-lg">Historico</Heading>
+          <div className="w-52">
+            <Select value={historicalMonth ?? ""} onValueChange={handleMonthChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccionar mes" />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    <span className="capitalize">{opt.label}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {historicalMonth && historicalRevenue != null ? (
+          <div className="grid grid-cols-3 gap-3">
+            <MetricCard label="Turnos" value={historicalCount ?? 0} />
+            <MetricCard label="Completados" value={historicalCompletedCount ?? 0} />
+            <MetricCard label="Ingresos" value={formatARS(historicalRevenue)} />
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="p-6 text-center">
+              <Text variant="muted">Selecciona un mes para ver las metricas</Text>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Next appointment */}
