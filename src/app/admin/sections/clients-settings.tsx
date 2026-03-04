@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Button, Heading, Text, Badge, Card, CardContent } from "@/components/ui";
-import { getClientsAction } from "@/app/admin/turnero-actions";
+import { getClientsAction, getAllClientsAction } from "@/app/admin/turnero-actions";
 import type { Client } from "@/types";
 import { DAY_NAMES } from "@/types";
 
@@ -13,6 +13,7 @@ export function ClientsSettings() {
   const [total, setTotal] = React.useState(0);
   const [page, setPage] = React.useState(1);
   const [loading, setLoading] = React.useState(true);
+  const [exporting, setExporting] = React.useState(false);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -27,6 +28,30 @@ export function ClientsSettings() {
   React.useEffect(() => {
     fetchClients(page);
   }, [page, fetchClients]);
+
+  async function handleExportCsv() {
+    setExporting(true);
+    const allClients = await getAllClientsAction();
+
+    const header = "Nombre,Telefono,Email,Turnos,Dia frecuente";
+    const rows = allClients.map((c) => {
+      const topDay = getTopDay(c);
+      const name = c.name.replace(/"/g, '""');
+      const phone = (c.phone || "").replace(/"/g, '""');
+      const email = (c.email || "").replace(/"/g, '""');
+      return `"${name}","${phone}","${email}",${c.total_appointments},"${topDay}"`;
+    });
+
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "clientes.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    setExporting(false);
+  }
 
   function getTopDay(client: Client): string {
     const counts = [
@@ -57,6 +82,9 @@ export function ClientsSettings() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <Text size="sm" variant="muted">{total} cliente{total !== 1 ? "s" : ""}</Text>
+        <Button variant="outline" size="sm" disabled={exporting} onClick={handleExportCsv}>
+          {exporting ? "Exportando..." : "Descargar CSV"}
+        </Button>
       </div>
 
       {/* Table */}

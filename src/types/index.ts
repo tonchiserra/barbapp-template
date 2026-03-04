@@ -152,6 +152,15 @@ export interface ThemeSettings {
   secondary: string;
 }
 
+// --- Email ---
+
+export interface EmailSettings {
+  subject: string;
+  greeting: string;
+  body: string;
+  farewell: string;
+}
+
 export interface Service {
   id: string;
   user_id: string;
@@ -270,6 +279,7 @@ export interface SiteSettings {
   map: MapSettings;
   booking: BookingSettings;
   theme: ThemeSettings;
+  email: EmailSettings;
   created_at: string;
   updated_at: string;
 }
@@ -381,6 +391,13 @@ export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
   foreground: "#121212",
   primary: "#007AFF",
   secondary: "#f5f5f6",
+};
+
+export const DEFAULT_EMAIL_SETTINGS: EmailSettings = {
+  subject: "Gracias por tu visita, {nombre}!",
+  greeting: "Gracias por tu visita, {nombre}!",
+  body: "Tu turno fue completado con exito. Aca tenes el resumen:",
+  farewell: "Te esperamos de nuevo!",
 };
 
 export const DEFAULT_SCHEDULE: Omit<StaffSchedule, "id" | "staff_id">[] = [

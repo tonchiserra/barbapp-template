@@ -13,6 +13,7 @@ import type {
   MapSettings,
   MapLocation,
   ThemeSettings,
+  EmailSettings,
   ButtonVariant,
   HAlign,
   VAlign,
@@ -544,6 +545,48 @@ export async function saveThemeSettings(
   if (error) {
     console.error("saveThemeSettings error:", error);
     return { error: "Error al guardar los estilos. Intenta de nuevo." };
+  }
+
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Email
+// ---------------------------------------------------------------------------
+
+export interface SaveEmailState {
+  error?: string;
+  success?: boolean;
+}
+
+export async function saveEmailSettings(
+  _prev: SaveEmailState | null,
+  formData: FormData,
+): Promise<SaveEmailState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "No autenticado" };
+
+  const subject = ((formData.get("subject") as string) || "").trim();
+  const greeting = ((formData.get("greeting") as string) || "").trim();
+  const body = ((formData.get("body") as string) || "").trim();
+  const farewell = ((formData.get("farewell") as string) || "").trim();
+
+  if (!subject) return { error: "El asunto es obligatorio" };
+  if (!greeting) return { error: "El saludo es obligatorio" };
+
+  const email: EmailSettings = { subject, greeting, body, farewell };
+
+  const { error } = await supabase
+    .from("site_settings")
+    .upsert({ user_id: user.id, email }, { onConflict: "user_id" });
+
+  if (error) {
+    console.error("saveEmailSettings error:", error);
+    return { error: "Error al guardar la configuracion de email. Intenta de nuevo." };
   }
 
   return { success: true };

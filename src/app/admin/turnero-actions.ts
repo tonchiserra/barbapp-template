@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { sendCompletionEmail } from "@/lib/email";
+import { getEmailSettings } from "@/lib/queries/site-settings";
 import type { AppointmentStatus } from "@/types";
 import { DEFAULT_SCHEDULE } from "@/types";
 
@@ -469,6 +471,33 @@ export async function updateAppointmentStatus(
     return { error: "Error al actualizar el turno" };
   }
 
+  // Send completion email (fire-and-forget)
+  if (status === "completed") {
+    const { data: apt } = await supabase
+      .from("appointments")
+      .select("client_email, client_name, date, start_time, service_id, staff_id")
+      .eq("id", appointmentId)
+      .single();
+
+    if (apt?.client_email) {
+      const [{ data: svc }, { data: staff }, emailSettings] = await Promise.all([
+        supabase.from("services").select("name").eq("id", apt.service_id).single(),
+        supabase.from("staff").select("name").eq("id", apt.staff_id).single(),
+        getEmailSettings(user.id),
+      ]);
+
+      sendCompletionEmail({
+        to: apt.client_email,
+        clientName: apt.client_name,
+        serviceName: svc?.name ?? "Servicio",
+        staffName: staff?.name ?? "",
+        date: apt.date,
+        startTime: apt.start_time,
+        emailSettings,
+      }).catch((err) => console.error("Completion email error:", err));
+    }
+  }
+
   revalidatePath("/admin");
   return { success: true };
 }
@@ -650,4 +679,20 @@ export async function getClientsAction(
     clients: (data as import("@/types").Client[]) ?? [],
     total: count ?? 0,
   };
+}
+
+export async function getAllClientsAction(): Promise<import("@/types").Client[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("total_appointments", { ascending: false });
+
+  return (data as import("@/types").Client[]) ?? [];
 }

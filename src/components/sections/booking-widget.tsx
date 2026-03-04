@@ -152,6 +152,23 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
   }
 
   if (step === "success") {
+    let calendarUrl = "";
+    if (selectedDate && selectedTime && selectedService) {
+      const [h, m] = selectedTime.split(":").map(Number);
+      const start = new Date(selectedDate);
+      start.setHours(h, m, 0, 0);
+      const end = new Date(start.getTime() + (selectedService.duration_minutes ?? 30) * 60_000);
+      const fmt = (d: Date) =>
+        `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}00`;
+      const params = new URLSearchParams({
+        action: "TEMPLATE",
+        text: `${selectedService.name}${selectedStaff ? ` con ${selectedStaff.name}` : ""}`,
+        dates: `${fmt(start)}/${fmt(end)}`,
+        details: `Turno reservado: ${selectedService.name}${selectedStaff ? ` con ${selectedStaff.name}` : ""}`,
+      });
+      calendarUrl = `https://calendar.google.com/calendar/render?${params.toString()}`;
+    }
+
     return (
       <section id="Turnero" className="flex w-full items-center justify-center py-16">
         <div className="mx-auto flex max-w-lg flex-col items-center gap-6 px-4 text-center">
@@ -166,9 +183,21 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
             {selectedDate && format(selectedDate, "EEEE d 'de' MMMM", { locale: es })} a las{" "}
             {selectedTime?.slice(0, 5)} ha sido reservado.
           </Text>
-          <Button variant="outline" onClick={handleReset}>
-            Reservar otro turno
-          </Button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {calendarUrl && (
+              <a
+                href={calendarUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-all duration-200 hover:bg-primary/90"
+              >
+                Agregar a Google Calendar
+              </a>
+            )}
+            <Button variant="outline" onClick={handleReset}>
+              Reservar otro turno
+            </Button>
+          </div>
         </div>
       </section>
     );
