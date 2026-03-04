@@ -117,6 +117,122 @@ export interface VideoSettings {
   is_visible: boolean;
 }
 
+// --- Booking ---
+
+export interface BookingSettings {
+  title: string;
+  description: string;
+  advance_days: number;
+  min_advance_hours: number;
+  is_visible: boolean;
+}
+
+export interface Service {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string;
+  price: number;
+  duration_minutes: number;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StaffMember {
+  id: string;
+  user_id: string;
+  name: string;
+  avatar_url: string;
+  is_owner: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StaffService {
+  id: string;
+  staff_id: string;
+  service_id: string;
+  price_override: number | null;
+  duration_override: number | null;
+}
+
+export interface StaffSchedule {
+  id: string;
+  staff_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_working: boolean;
+}
+
+export interface StaffTimeOff {
+  id: string;
+  staff_id: string;
+  date: string;
+  reason: string;
+}
+
+export interface StaffBlockedTime {
+  id: string;
+  staff_id: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  reason: string;
+  created_at: string;
+}
+
+export type AppointmentStatus = "confirmed" | "completed" | "cancelled" | "no_show";
+
+export interface Appointment {
+  id: string;
+  user_id: string;
+  staff_id: string;
+  service_id: string;
+  client_name: string;
+  client_phone: string;
+  client_email: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  price: number;
+  status: AppointmentStatus;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppointmentWithDetails extends Appointment {
+  staff_name: string;
+  service_name: string;
+}
+
+export interface AvailableSlot {
+  slot_time: string;
+}
+
+export interface Client {
+  id: string;
+  user_id: string;
+  name: string;
+  phone: string;
+  email: string;
+  total_appointments: number;
+  dow_0: number;
+  dow_1: number;
+  dow_2: number;
+  dow_3: number;
+  dow_4: number;
+  dow_5: number;
+  dow_6: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SiteSettings {
   id: string;
   user_id: string;
@@ -126,6 +242,7 @@ export interface SiteSettings {
   video: VideoSettings;
   gallery: GallerySettings;
   multicolumn: MulticolumnSettings;
+  booking: BookingSettings;
   created_at: string;
   updated_at: string;
 }
@@ -209,6 +326,26 @@ export const DEFAULT_CAROUSEL_SLIDE: CarouselSlide = {
   align_h: "center",
   align_v: "center",
 };
+
+export const DEFAULT_BOOKING_SETTINGS: BookingSettings = {
+  title: "Reserva tu turno",
+  description: "",
+  advance_days: 30,
+  min_advance_hours: 2,
+  is_visible: true,
+};
+
+export const DEFAULT_SCHEDULE: Omit<StaffSchedule, "id" | "staff_id">[] = [
+  { day_of_week: 0, start_time: "09:00:00", end_time: "18:00:00", is_working: false },
+  { day_of_week: 1, start_time: "09:00:00", end_time: "18:00:00", is_working: true },
+  { day_of_week: 2, start_time: "09:00:00", end_time: "18:00:00", is_working: true },
+  { day_of_week: 3, start_time: "09:00:00", end_time: "18:00:00", is_working: true },
+  { day_of_week: 4, start_time: "09:00:00", end_time: "18:00:00", is_working: true },
+  { day_of_week: 5, start_time: "09:00:00", end_time: "18:00:00", is_working: true },
+  { day_of_week: 6, start_time: "09:00:00", end_time: "14:00:00", is_working: true },
+];
+
+export const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado"];
 
 export const DEFAULT_CAROUSEL_SETTINGS: CarouselSettings = {
   slides: [],

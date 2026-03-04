@@ -5,6 +5,7 @@ import { Carousel } from "@/components/sections/carousel";
 import { Video } from "@/components/sections/video";
 import { Gallery } from "@/components/sections/gallery";
 import { Multicolumn } from "@/components/sections/multicolumn";
+import { Booking } from "@/components/sections/booking";
 import { getPublicSiteSettings } from "@/lib/queries/site-settings";
 import { DEFAULT_HEADER_SETTINGS, DEFAULT_FOOTER_SETTINGS, DEFAULT_CAROUSEL_SETTINGS, DEFAULT_VIDEO_SETTINGS, DEFAULT_GALLERY_SETTINGS, DEFAULT_MULTICOLUMN_SETTINGS } from "@/types";
 
@@ -24,6 +25,7 @@ export default async function Home() {
       <Video settings={videoSettings} />
       <Gallery settings={gallerySettings} />
       <Multicolumn settings={multicolumnSettings} />
+      <Booking />
       <Footer settings={footerSettings} />
     </>
   );

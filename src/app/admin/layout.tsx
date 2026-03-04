@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ToastProvider } from "@/components/ui";
+import { AdminShell } from "./admin-shell";
 
 export default async function AdminLayout({
   children,
@@ -16,5 +17,9 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  return <ToastProvider>{children}</ToastProvider>;
+  return (
+    <ToastProvider>
+      <AdminShell>{children}</AdminShell>
+    </ToastProvider>
+  );
 }

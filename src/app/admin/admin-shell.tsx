@@ -1,20 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { cn } from "@/lib/utils";
+import { usePathname } from "next/navigation";
 import NextLink from "next/link";
+import { cn } from "@/lib/utils";
 import { Heading, Text } from "@/components/ui";
-import { HeaderSettingsForm } from "./sections/header-settings";
-import { FooterSettingsForm } from "./sections/footer-settings";
-import { CarouselSettingsForm } from "./sections/carousel-settings";
-import { VideoSettingsForm } from "./sections/video-settings";
-import { GallerySettingsForm } from "./sections/gallery-settings";
-import { MulticolumnSettingsForm } from "./sections/multicolumn-settings";
-import type { HeaderSettings, FooterSettings, CarouselSettings, VideoSettings, GallerySettings, MulticolumnSettings } from "@/types";
 
-const SECTIONS = [
+const LANDING_SECTIONS = [
   {
-    key: "header",
+    href: "/admin/header",
     label: "Header",
     description: "Logo, navegacion y redes sociales",
     icon: (
@@ -25,7 +19,7 @@ const SECTIONS = [
     ),
   },
   {
-    key: "carousel",
+    href: "/admin/carousel",
     label: "Carrusel",
     description: "Imagenes destacadas con texto y CTA",
     icon: (
@@ -38,7 +32,7 @@ const SECTIONS = [
     ),
   },
   {
-    key: "video",
+    href: "/admin/video",
     label: "Video",
     description: "Video destacado de YouTube",
     icon: (
@@ -48,7 +42,7 @@ const SECTIONS = [
     ),
   },
   {
-    key: "gallery",
+    href: "/admin/gallery",
     label: "Galeria",
     description: "Galeria de imagenes",
     icon: (
@@ -60,7 +54,7 @@ const SECTIONS = [
     ),
   },
   {
-    key: "multicolumn",
+    href: "/admin/multicolumn",
     label: "Multicolumna",
     description: "Grilla de bloques con imagen y texto",
     icon: (
@@ -73,7 +67,7 @@ const SECTIONS = [
     ),
   },
   {
-    key: "footer",
+    href: "/admin/footer",
     label: "Footer",
     description: "Enlaces, redes sociales y copyright",
     icon: (
@@ -83,28 +77,95 @@ const SECTIONS = [
       </svg>
     ),
   },
-] as const;
+];
 
-type SectionKey = (typeof SECTIONS)[number]["key"];
+const TURNERO_SECTIONS = [
+  {
+    href: "/admin/dashboard",
+    label: "Dashboard",
+    description: "Metricas y agenda del dia",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+        <path d="M3 3v18h18" />
+        <path d="M7 16l4-8 4 4 4-6" />
+      </svg>
+    ),
+  },
+  {
+    href: "/admin/servicios",
+    label: "Servicios",
+    description: "Servicios que ofreces",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+        <path d="M9 5H2v7l6.29 6.29c.94.94 2.48.94 3.42 0l3.58-3.58c.94-.94.94-2.48 0-3.42L9 5Z" />
+        <path d="M6 9.01V9" />
+        <path d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19" />
+      </svg>
+    ),
+  },
+  {
+    href: "/admin/equipo",
+    label: "Equipo",
+    description: "Barberos y horarios",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    ),
+  },
+  {
+    href: "/admin/clientes",
+    label: "Clientes",
+    description: "Base de datos de clientes",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    ),
+  },
+];
 
-interface AdminPanelProps {
-  userId: string;
-  headerSettings: HeaderSettings;
-  footerSettings: FooterSettings;
-  carouselSettings: CarouselSettings;
-  videoSettings: VideoSettings;
-  gallerySettings: GallerySettings;
-  multicolumnSettings: MulticolumnSettings;
+const ALL_SECTIONS = [...LANDING_SECTIONS, ...TURNERO_SECTIONS];
+
+function NavItem({ href, label, description, icon, active, onClick }: {
+  href: string;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  active: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <NextLink
+      href={href}
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors",
+        active
+          ? "bg-primary/10 text-primary"
+          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+      )}
+    >
+      {icon}
+      <div className="flex flex-col">
+        <span>{label}</span>
+        <span className="text-xs font-normal text-muted-foreground">{description}</span>
+      </div>
+    </NextLink>
+  );
 }
 
-export function AdminPanel({ userId, headerSettings, footerSettings, carouselSettings, videoSettings, gallerySettings, multicolumnSettings }: AdminPanelProps) {
-  const [activeSection, setActiveSection] = React.useState<SectionKey>("header");
+export function AdminShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
-  const handleSectionChange = (key: SectionKey) => {
-    setActiveSection(key);
-    setSidebarOpen(false);
-  };
+  const currentSection = ALL_SECTIONS.find((s) => pathname === s.href);
 
   return (
     <div className="flex h-screen flex-col">
@@ -122,7 +183,7 @@ export function AdminPanel({ userId, headerSettings, footerSettings, carouselSet
           </svg>
         </button>
         <Heading as="h1" className="text-lg">
-          {SECTIONS.find((s) => s.key === activeSection)?.label}
+          {currentSection?.label ?? "Admin"}
         </Heading>
       </div>
 
@@ -165,64 +226,48 @@ export function AdminPanel({ userId, headerSettings, footerSettings, carouselSet
             </button>
           </div>
 
-          <nav className="flex flex-col gap-1 p-3">
+          <nav className="flex flex-col gap-1 overflow-y-auto p-3">
             <Text size="sm" variant="muted" className="px-3 py-2 font-medium uppercase tracking-wider">
-              Secciones
+              Landing Page
             </Text>
-            {SECTIONS.map((section) => (
-              <button
-                key={section.key}
-                onClick={() => handleSectionChange(section.key)}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors",
-                  activeSection === section.key
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                )}
-              >
-                {section.icon}
-                <div className="flex flex-col">
-                  <span>{section.label}</span>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {section.description}
-                  </span>
-                </div>
-              </button>
+            {LANDING_SECTIONS.map((section) => (
+              <NavItem
+                key={section.href}
+                {...section}
+                active={pathname === section.href}
+                onClick={() => setSidebarOpen(false)}
+              />
+            ))}
+
+            <Text size="sm" variant="muted" className="mt-4 px-3 py-2 font-medium uppercase tracking-wider">
+              Turnero
+            </Text>
+            {TURNERO_SECTIONS.map((section) => (
+              <NavItem
+                key={section.href}
+                {...section}
+                active={pathname === section.href}
+                onClick={() => setSidebarOpen(false)}
+              />
             ))}
           </nav>
         </aside>
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="px-4 py-8 sm:px-6 lg:px-8">
             {/* Section title (desktop only) */}
-            <div className="mb-8 hidden lg:block">
-              <Heading as="h1" className="text-2xl">
-                {SECTIONS.find((s) => s.key === activeSection)?.label}
-              </Heading>
-              <Text size="sm" variant="muted" className="mt-1">
-                {SECTIONS.find((s) => s.key === activeSection)?.description}
-              </Text>
-            </div>
-
-            {activeSection === "header" && (
-              <HeaderSettingsForm userId={userId} initialSettings={headerSettings} />
+            {currentSection && (
+              <div className="mb-8 hidden lg:block">
+                <Heading as="h1" className="text-2xl">
+                  {currentSection.label}
+                </Heading>
+                <Text size="sm" variant="muted" className="mt-1">
+                  {currentSection.description}
+                </Text>
+              </div>
             )}
-            {activeSection === "carousel" && (
-              <CarouselSettingsForm userId={userId} initialSettings={carouselSettings} />
-            )}
-            {activeSection === "video" && (
-              <VideoSettingsForm initialSettings={videoSettings} />
-            )}
-            {activeSection === "gallery" && (
-              <GallerySettingsForm userId={userId} initialSettings={gallerySettings} />
-            )}
-            {activeSection === "multicolumn" && (
-              <MulticolumnSettingsForm userId={userId} initialSettings={multicolumnSettings} />
-            )}
-            {activeSection === "footer" && (
-              <FooterSettingsForm initialSettings={footerSettings} />
-            )}
+            {children}
           </div>
         </main>
       </div>
