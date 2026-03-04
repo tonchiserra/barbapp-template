@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import type { SiteSettings, HeaderSettings, FooterSettings, CarouselSettings, VideoSettings, GallerySettings, MulticolumnSettings, MapSettings, BookingSettings } from "@/types";
-import { DEFAULT_HEADER_SETTINGS, DEFAULT_FOOTER_SETTINGS, DEFAULT_CAROUSEL_SETTINGS, DEFAULT_VIDEO_SETTINGS, DEFAULT_GALLERY_SETTINGS, DEFAULT_MULTICOLUMN_SETTINGS, DEFAULT_MAP_SETTINGS, DEFAULT_BOOKING_SETTINGS } from "@/types";
+import type { SiteSettings, HeaderSettings, FooterSettings, CarouselSettings, VideoSettings, GallerySettings, MulticolumnSettings, MapSettings, BookingSettings, ThemeSettings } from "@/types";
+import { DEFAULT_HEADER_SETTINGS, DEFAULT_FOOTER_SETTINGS, DEFAULT_CAROUSEL_SETTINGS, DEFAULT_VIDEO_SETTINGS, DEFAULT_GALLERY_SETTINGS, DEFAULT_MULTICOLUMN_SETTINGS, DEFAULT_MAP_SETTINGS, DEFAULT_BOOKING_SETTINGS, DEFAULT_THEME_SETTINGS } from "@/types";
 
 export async function getSiteSettings(
   userId: string,
@@ -77,6 +77,14 @@ export async function getBookingSettings(
   const settings = await getSiteSettings(userId);
   if (!settings) return DEFAULT_BOOKING_SETTINGS;
   return settings.booking ?? DEFAULT_BOOKING_SETTINGS;
+}
+
+export async function getThemeSettings(
+  userId: string,
+): Promise<ThemeSettings> {
+  const settings = await getSiteSettings(userId);
+  if (!settings) return DEFAULT_THEME_SETTINGS;
+  return settings.theme ?? DEFAULT_THEME_SETTINGS;
 }
 
 /** MVP: primera row. Luego se reemplaza por slug/subdominio. */

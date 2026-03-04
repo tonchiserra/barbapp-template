@@ -13,14 +13,20 @@ export function Gallery({ settings, className }: GalleryProps) {
 
   return (
     <section id="Galeria" className={cn("w-full py-16", className)}>
-      <div className="mx-auto flex max-w-6xl flex-col items-center gap-8 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 px-4 sm:px-6 lg:px-8">
         {settings.title && (
           <Heading as="h2" className="text-center sm:text-4xl">
             {settings.title}
           </Heading>
         )}
 
-        <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {settings.description && (
+          <Text variant="muted" size="lg" className="max-w-2xl text-center">
+            {settings.description}
+          </Text>
+        )}
+
+        <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 my-8">
           {settings.images.map((url, index) => (
             <div
               key={index}
@@ -36,12 +42,6 @@ export function Gallery({ settings, className }: GalleryProps) {
             </div>
           ))}
         </div>
-
-        {settings.description && (
-          <Text variant="muted" size="lg" className="max-w-2xl text-center">
-            {settings.description}
-          </Text>
-        )}
 
         {settings.cta_label && settings.cta_url && (
           <LinkButton href={settings.cta_url} variant={settings.cta_variant} size="lg">

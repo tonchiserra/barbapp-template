@@ -12,6 +12,7 @@ import type {
   MulticolumnBlock,
   MapSettings,
   MapLocation,
+  ThemeSettings,
   ButtonVariant,
   HAlign,
   VAlign,
@@ -491,6 +492,58 @@ export async function saveMapSettings(
   if (error) {
     console.error("saveMapSettings error:", error);
     return { error: "Error al guardar la configuracion. Intenta de nuevo." };
+  }
+
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Theme
+// ---------------------------------------------------------------------------
+
+export interface SaveThemeState {
+  error?: string;
+  success?: boolean;
+}
+
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+export async function saveThemeSettings(
+  _prev: SaveThemeState | null,
+  formData: FormData,
+): Promise<SaveThemeState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "No autenticado" };
+
+  const background = ((formData.get("background") as string) || "").trim();
+  const foreground = ((formData.get("foreground") as string) || "").trim();
+  const primary = ((formData.get("primary") as string) || "").trim();
+  const secondary = ((formData.get("secondary") as string) || "").trim();
+
+  for (const [label, value] of [
+    ["Fondo", background],
+    ["Texto", foreground],
+    ["Primario", primary],
+    ["Secundario", secondary],
+  ]) {
+    if (!HEX_COLOR_RE.test(value)) {
+      return { error: `Color invalido para "${label}": ${value}` };
+    }
+  }
+
+  const theme: ThemeSettings = { background, foreground, primary, secondary };
+
+  const { error } = await supabase
+    .from("site_settings")
+    .upsert({ user_id: user.id, theme }, { onConflict: "user_id" });
+
+  if (error) {
+    console.error("saveThemeSettings error:", error);
+    return { error: "Error al guardar los estilos. Intenta de nuevo." };
   }
 
   return { success: true };

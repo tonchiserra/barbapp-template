@@ -143,6 +143,15 @@ export interface BookingSettings {
   is_visible: boolean;
 }
 
+// --- Theme ---
+
+export interface ThemeSettings {
+  background: string;
+  foreground: string;
+  primary: string;
+  secondary: string;
+}
+
 export interface Service {
   id: string;
   user_id: string;
@@ -260,6 +269,7 @@ export interface SiteSettings {
   multicolumn: MulticolumnSettings;
   map: MapSettings;
   booking: BookingSettings;
+  theme: ThemeSettings;
   created_at: string;
   updated_at: string;
 }
@@ -364,6 +374,13 @@ export const DEFAULT_BOOKING_SETTINGS: BookingSettings = {
   advance_days: 30,
   min_advance_hours: 2,
   is_visible: true,
+};
+
+export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
+  background: "#ffffff",
+  foreground: "#121212",
+  primary: "#007AFF",
+  secondary: "#f5f5f6",
 };
 
 export const DEFAULT_SCHEDULE: Omit<StaffSchedule, "id" | "staff_id">[] = [

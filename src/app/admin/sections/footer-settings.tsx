@@ -5,7 +5,6 @@ import { useActionState } from "react";
 import {
   Button,
   Input,
-  Switch,
   Card,
   CardHeader,
   CardContent,
@@ -42,7 +41,6 @@ export function FooterSettingsForm({ initialSettings }: FooterSettingsProps) {
       ? initialSettings.menu_links
       : [{ label: "", url: "" }],
   );
-  const [isVisible, setIsVisible] = React.useState(initialSettings.is_visible);
   const [socialLinks, setSocialLinks] = React.useState<SocialLinks>(
     initialSettings.social_links,
   );
@@ -73,23 +71,7 @@ export function FooterSettingsForm({ initialSettings }: FooterSettingsProps) {
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
-      {/* Visibilidad */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <Heading as="h3" className="text-base">
-                Visibilidad
-              </Heading>
-              <Text size="sm" variant="muted">
-                Mostrar u ocultar el footer en tu pagina
-              </Text>
-            </div>
-            <Switch checked={isVisible} onCheckedChange={setIsVisible} />
-          </div>
-          {isVisible && <input type="hidden" name="is_visible" value="on" />}
-        </CardHeader>
-      </Card>
+      <input type="hidden" name="is_visible" value="on" />
 
       {/* Menu Links */}
       <Card>

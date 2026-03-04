@@ -151,19 +151,17 @@ export function GallerySettingsForm({ userId, initialSettings }: GallerySettings
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-4">
             {images.map((url, index) => (
               <div key={index} className="relative">
-                <div className="aspect-[4/5]">
-                  <ImageUpload
-                    bucket="images"
-                    path={`${userId}/gallery/${index}`}
-                    currentUrl={url || undefined}
-                    onUpload={(newUrl) => updateImage(index, newUrl)}
-                    onRemove={() => removeImage(index)}
-                    className="h-full"
-                  />
-                </div>
+                <ImageUpload
+                  bucket="images"
+                  path={`${userId}/gallery/${index}`}
+                  currentUrl={url || undefined}
+                  onUpload={(newUrl) => updateImage(index, newUrl)}
+                  onRemove={() => removeImage(index)}
+                  className="h-full"
+                />
               </div>
             ))}
           </div>

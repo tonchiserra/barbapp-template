@@ -289,7 +289,7 @@ export function CarouselSettingsForm({ userId, initialSettings }: CarouselSettin
                   type="color"
                   value={slide.text_color}
                   onChange={(e) => updateSlide(index, "text_color", e.target.value)}
-                  className="h-10 w-10 shrink-0 rounded-lg border border-input bg-background p-1"
+                  className="h-10 w-10 shrink-0 rounded-lg border border-input bg-background"
                 />
                 <Input
                   value={slide.text_color}

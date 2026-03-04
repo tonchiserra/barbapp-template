@@ -265,6 +265,27 @@ export function BookingDashboard({
         </div>
       </div>
 
+      {/* Next appointment */}
+      <NextAppointmentCard appointment={nextAppointment} />
+
+      {/* Today's agenda */}
+      <div>
+        <Heading as="h2" className="mb-4 text-lg">Agenda de hoy</Heading>
+        {todayAppointments.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center">
+              <Text variant="muted">No hay turnos para hoy</Text>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {todayAppointments.map((appt) => (
+              <AppointmentRow key={appt.id} appointment={appt} />
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Historical */}
       <div>
         <div className="mb-4 flex items-center justify-between gap-4">
@@ -297,27 +318,6 @@ export function BookingDashboard({
               <Text variant="muted">Selecciona un mes para ver las metricas</Text>
             </CardContent>
           </Card>
-        )}
-      </div>
-
-      {/* Next appointment */}
-      <NextAppointmentCard appointment={nextAppointment} />
-
-      {/* Today's agenda */}
-      <div>
-        <Heading as="h2" className="mb-4 text-lg">Agenda de hoy</Heading>
-        {todayAppointments.length === 0 ? (
-          <Card>
-            <CardContent className="p-6 text-center">
-              <Text variant="muted">No hay turnos para hoy</Text>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {todayAppointments.map((appt) => (
-              <AppointmentRow key={appt.id} appointment={appt} />
-            ))}
-          </div>
         )}
       </div>
     </div>

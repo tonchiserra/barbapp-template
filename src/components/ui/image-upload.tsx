@@ -72,15 +72,15 @@ export function ImageUpload({
     <div className={cn("flex flex-col gap-3", className)}>
       {currentUrl ? (
         <div className="flex items-center gap-4">
-          <div className="relative h-16 w-32 overflow-hidden rounded-xl border bg-secondary">
+          <div className="relative h-32 w-32 overflow-hidden rounded-xl border bg-secondary">
             <Image
               src={currentUrl}
               alt="Logo actual"
               fill
-              className="object-contain p-2"
+              className="object-cover"
             />
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col items-start gap-1.5">
             <button
               type="button"
               onClick={() => inputRef.current?.click()}

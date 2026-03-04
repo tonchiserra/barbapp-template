@@ -153,7 +153,7 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
 
   if (step === "success") {
     return (
-      <section id="Turnero" className="flex min-h-dvh w-full items-center justify-center py-16">
+      <section id="Turnero" className="flex w-full items-center justify-center py-16">
         <div className="mx-auto flex max-w-lg flex-col items-center gap-6 px-4 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8 text-green-600">
@@ -175,7 +175,7 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
   }
 
   return (
-    <section id="Turnero" className="flex min-h-dvh w-full items-center justify-center py-16">
+    <section id="Turnero" className="flex w-full items-center justify-center py-16">
       <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-8 px-4 sm:px-6 lg:px-8">
         {settings.title && (
           <Heading as="h2" className="text-center sm:text-4xl">
@@ -192,7 +192,7 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
         <div className="flex items-center gap-2">
           {STEP_LABELS.map((label, i) => (
             <React.Fragment key={label}>
-              {i > 0 && <div className={cn("h-px w-6", i <= stepIndex ? "bg-primary" : "bg-border")} />}
+              {i > 0 && <div className={cn("h-px w-4", i <= stepIndex ? "bg-primary" : "bg-border")} />}
               <div className={cn(
                 "flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold transition-colors",
                 i < stepIndex ? "bg-primary text-primary-foreground" :
