@@ -71,6 +71,7 @@ export function Carousel({ settings, className }: CarouselProps) {
 
   return (
     <section
+      id="Carrusel"
       className={cn("relative w-full overflow-hidden", className)}
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}

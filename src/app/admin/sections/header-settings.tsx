@@ -261,7 +261,7 @@ export function HeaderSettingsForm({ userId, initialSettings }: HeaderSettingsPr
               name={`social_${platform.key}`}
               label={platform.label}
               placeholder={platform.placeholder}
-              type="url"
+              type={platform.key === "email" ? "email" : "url"}
               value={socialLinks[platform.key] || ""}
               onChange={(e) => updateSocialLink(platform.key, e.target.value)}
             />

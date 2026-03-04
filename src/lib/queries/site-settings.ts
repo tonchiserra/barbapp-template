@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import type { SiteSettings, HeaderSettings, FooterSettings, CarouselSettings, VideoSettings, GallerySettings, MulticolumnSettings, BookingSettings } from "@/types";
-import { DEFAULT_HEADER_SETTINGS, DEFAULT_FOOTER_SETTINGS, DEFAULT_CAROUSEL_SETTINGS, DEFAULT_VIDEO_SETTINGS, DEFAULT_GALLERY_SETTINGS, DEFAULT_MULTICOLUMN_SETTINGS, DEFAULT_BOOKING_SETTINGS } from "@/types";
+import type { SiteSettings, HeaderSettings, FooterSettings, CarouselSettings, VideoSettings, GallerySettings, MulticolumnSettings, MapSettings, BookingSettings } from "@/types";
+import { DEFAULT_HEADER_SETTINGS, DEFAULT_FOOTER_SETTINGS, DEFAULT_CAROUSEL_SETTINGS, DEFAULT_VIDEO_SETTINGS, DEFAULT_GALLERY_SETTINGS, DEFAULT_MULTICOLUMN_SETTINGS, DEFAULT_MAP_SETTINGS, DEFAULT_BOOKING_SETTINGS } from "@/types";
 
 export async function getSiteSettings(
   userId: string,
@@ -61,6 +61,14 @@ export async function getMulticolumnSettings(
   const settings = await getSiteSettings(userId);
   if (!settings) return DEFAULT_MULTICOLUMN_SETTINGS;
   return settings.multicolumn ?? DEFAULT_MULTICOLUMN_SETTINGS;
+}
+
+export async function getMapSettings(
+  userId: string,
+): Promise<MapSettings> {
+  const settings = await getSiteSettings(userId);
+  if (!settings) return DEFAULT_MAP_SETTINGS;
+  return settings.map ?? DEFAULT_MAP_SETTINGS;
 }
 
 export async function getBookingSettings(

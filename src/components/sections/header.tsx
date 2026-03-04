@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogClose,
   DialogTitle,
+  Link,
 } from "@/components/ui";
 import { SOCIAL_ICONS } from "@/components/icons/social";
 import type { HeaderSettings, SocialPlatform } from "@/types";
@@ -27,8 +28,12 @@ export function Header({ settings, className }: HeaderProps) {
     ([, url]) => url !== null && url !== "",
   ) as [SocialPlatform, string][];
 
+  const getSocialHref = (platform: string, value: string) =>
+    platform === "email" ? `mailto:${value}` : value;
+
   return (
     <header
+      id="Header"
       className={cn(
         "sticky top-0 z-40 w-full border-b bg-background",
         className,
@@ -43,7 +48,7 @@ export function Header({ settings, className }: HeaderProps) {
               alt={settings.logo_text || "Logo"}
               width={120}
               height={40}
-              className="h-8 w-auto object-contain"
+              className="h-12 w-auto object-contain"
               priority
             />
           ) : (
@@ -57,13 +62,14 @@ export function Header({ settings, className }: HeaderProps) {
         {settings.menu_links.length > 0 && (
           <nav className="hidden items-center gap-1 md:flex">
             {settings.menu_links.map((link, i) => (
-              <a
+              <Link
                 key={i}
                 href={link.url}
-                className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground"
+                variant={link.url === "#Turnero" ? "default" : "muted"}
+                className="px-3"
               >
                 {link.label}
-              </a>
+              </Link>
             ))}
           </nav>
         )}
@@ -76,9 +82,8 @@ export function Header({ settings, className }: HeaderProps) {
             return (
               <a
                 key={platform}
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={getSocialHref(platform, url)}
+                {...(platform !== "email" && { target: "_blank", rel: "noopener noreferrer" })}
                 className="rounded-lg p-2 text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground"
                 aria-label={platform}
               >
@@ -114,7 +119,7 @@ export function Header({ settings, className }: HeaderProps) {
 
           <DialogContent
             hideClose
-            className="fixed inset-y-0 right-0 left-auto top-0 z-50 flex h-full w-3/4 max-w-sm translate-x-0 translate-y-0 flex-col gap-6 rounded-none rounded-l-2xl border-l p-6 data-[state=open]:animate-none"
+            className="fixed inset-y-0 right-0 left-auto top-0 z-50 flex h-full w-3/4 max-w-sm translate-x-0 translate-y-0 flex-col gap-6 rounded-none rounded-l-2xl border-l p-6 data-[state=open]:animate-slide-in-right data-[state=closed]:animate-slide-out-right"
             aria-describedby={undefined}
           >
             <DialogTitle className="sr-only">
@@ -147,14 +152,15 @@ export function Header({ settings, className }: HeaderProps) {
               {settings.menu_links.length > 0 && (
                 <nav className="flex flex-col gap-1">
                   {settings.menu_links.map((link, i) => (
-                    <a
+                    <Link
                       key={i}
                       href={link.url}
+                      variant={link.url === "#Turnero" ? "default" : "muted"}
                       onClick={() => setMobileMenuOpen(false)}
-                      className="rounded-xl px-4 py-3 text-base font-medium text-foreground transition-colors duration-200 hover:bg-accent"
+                      className="px-4 py-3"
                     >
                       {link.label}
-                    </a>
+                    </Link>
                   ))}
                 </nav>
               )}
@@ -168,9 +174,8 @@ export function Header({ settings, className }: HeaderProps) {
                     return (
                       <a
                         key={platform}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href={getSocialHref(platform, url)}
+                        {...(platform !== "email" && { target: "_blank", rel: "noopener noreferrer" })}
                         className="rounded-xl p-3 text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground"
                         aria-label={platform}
                       >

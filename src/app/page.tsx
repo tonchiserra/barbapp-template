@@ -5,9 +5,10 @@ import { Carousel } from "@/components/sections/carousel";
 import { Video } from "@/components/sections/video";
 import { Gallery } from "@/components/sections/gallery";
 import { Multicolumn } from "@/components/sections/multicolumn";
+import { Map } from "@/components/sections/map";
 import { Booking } from "@/components/sections/booking";
 import { getPublicSiteSettings } from "@/lib/queries/site-settings";
-import { DEFAULT_HEADER_SETTINGS, DEFAULT_FOOTER_SETTINGS, DEFAULT_CAROUSEL_SETTINGS, DEFAULT_VIDEO_SETTINGS, DEFAULT_GALLERY_SETTINGS, DEFAULT_MULTICOLUMN_SETTINGS } from "@/types";
+import { DEFAULT_HEADER_SETTINGS, DEFAULT_FOOTER_SETTINGS, DEFAULT_CAROUSEL_SETTINGS, DEFAULT_VIDEO_SETTINGS, DEFAULT_GALLERY_SETTINGS, DEFAULT_MULTICOLUMN_SETTINGS, DEFAULT_MAP_SETTINGS } from "@/types";
 
 export default async function Home() {
   const siteSettings = await getPublicSiteSettings();
@@ -17,6 +18,7 @@ export default async function Home() {
   const videoSettings = siteSettings?.video ?? DEFAULT_VIDEO_SETTINGS;
   const gallerySettings = siteSettings?.gallery ?? DEFAULT_GALLERY_SETTINGS;
   const multicolumnSettings = siteSettings?.multicolumn ?? DEFAULT_MULTICOLUMN_SETTINGS;
+  const mapSettings = siteSettings?.map ?? DEFAULT_MAP_SETTINGS;
 
   return (
     <>
@@ -25,6 +27,7 @@ export default async function Home() {
       <Video settings={videoSettings} />
       <Gallery settings={gallerySettings} />
       <Multicolumn settings={multicolumnSettings} />
+      <Map settings={mapSettings} />
       <Booking />
       <Footer settings={footerSettings} />
     </>

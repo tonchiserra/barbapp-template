@@ -10,6 +10,8 @@ import type {
   GallerySettings,
   MulticolumnSettings,
   MulticolumnBlock,
+  MapSettings,
+  MapLocation,
   ButtonVariant,
   HAlign,
   VAlign,
@@ -57,6 +59,7 @@ export async function saveHeaderSettings(
     "x",
     "youtube",
     "telegram",
+    "email",
   ] as const;
 
   const socialLinks: SocialLinks = {
@@ -67,6 +70,7 @@ export async function saveHeaderSettings(
     x: null,
     youtube: null,
     telegram: null,
+    email: null,
   };
 
   for (const key of socialKeys) {
@@ -141,6 +145,7 @@ export async function saveFooterSettings(
     "x",
     "youtube",
     "telegram",
+    "email",
   ] as const;
 
   const socialLinks: SocialLinks = {
@@ -151,6 +156,7 @@ export async function saveFooterSettings(
     x: null,
     youtube: null,
     telegram: null,
+    email: null,
   };
 
   for (const key of socialKeys) {
@@ -205,8 +211,6 @@ export async function saveCarouselSettings(
   const slides: CarouselSlide[] = [];
   for (let i = 0; i < 3; i++) {
     const imageDesktop = (formData.get(`slides[${i}].image_desktop`) as string) || "";
-    if (!imageDesktop.trim()) continue;
-
     const imageMobile = (formData.get(`slides[${i}].image_mobile`) as string) || "";
     const title = (formData.get(`slides[${i}].title`) as string) || "";
     const subtitle = (formData.get(`slides[${i}].subtitle`) as string) || "";
@@ -216,6 +220,10 @@ export async function saveCarouselSettings(
     const textColor = (formData.get(`slides[${i}].text_color`) as string) || "#ffffff";
     const alignHRaw = (formData.get(`slides[${i}].align_h`) as string) || "center";
     const alignVRaw = (formData.get(`slides[${i}].align_v`) as string) || "center";
+
+    // Skip completely empty slides (no content at all)
+    const hasAnyContent = imageDesktop.trim() || imageMobile.trim() || title.trim() || subtitle.trim() || ctaLabel.trim();
+    if (!hasAnyContent) continue;
 
     const ctaVariant = VALID_BUTTON_VARIANTS.includes(ctaVariantRaw as ButtonVariant)
       ? (ctaVariantRaw as ButtonVariant)
@@ -431,6 +439,57 @@ export async function saveMulticolumnSettings(
 
   if (error) {
     console.error("saveMulticolumnSettings error:", error);
+    return { error: "Error al guardar la configuracion. Intenta de nuevo." };
+  }
+
+  return { success: true };
+}
+
+// --- Map ---
+
+export interface SaveMapState {
+  error?: string;
+  success?: boolean;
+}
+
+export async function saveMapSettings(
+  _prev: SaveMapState | null,
+  formData: FormData,
+): Promise<SaveMapState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "No autenticado" };
+  }
+
+  const isVisible = formData.get("is_visible") === "on";
+  const title = ((formData.get("title") as string) || "").trim();
+  const description = ((formData.get("description") as string) || "").trim();
+
+  const locations: MapLocation[] = [];
+  for (let i = 0; i < 5; i++) {
+    const name = ((formData.get(`locations[${i}].name`) as string) || "").trim();
+    const address = ((formData.get(`locations[${i}].address`) as string) || "").trim();
+    if (!address) continue;
+    locations.push({ name, address });
+  }
+
+  const map: MapSettings = {
+    title,
+    description,
+    locations,
+    is_visible: isVisible,
+  };
+
+  const { error } = await supabase
+    .from("site_settings")
+    .upsert({ user_id: user.id, map }, { onConflict: "user_id" });
+
+  if (error) {
+    console.error("saveMapSettings error:", error);
     return { error: "Error al guardar la configuracion. Intenta de nuevo." };
   }
 

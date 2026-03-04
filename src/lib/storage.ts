@@ -55,7 +55,9 @@ export async function uploadImage(
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
 
-  return { url: data.publicUrl, error: null };
+  // Append cache-busting param so browser/CDN fetches the new file
+  // when the same path is overwritten with a different image.
+  return { url: `${data.publicUrl}?v=${Date.now()}`, error: null };
 }
 
 export async function deleteImage(

@@ -12,7 +12,7 @@ export function Multicolumn({ settings, className }: MulticolumnProps) {
   if (!settings.is_visible || settings.blocks.length === 0) return null;
 
   return (
-    <section className={cn("w-full py-16", className)}>
+    <section id="Multicolumna" className={cn("w-full py-16", className)}>
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-8 px-4 sm:px-6 lg:px-8">
         {settings.title && (
           <Heading as="h2" className="text-center sm:text-4xl">

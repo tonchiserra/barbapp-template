@@ -14,11 +14,15 @@ export function Footer({ settings, className }: FooterProps) {
     ([, url]) => url !== null && url !== "",
   ) as [SocialPlatform, string][];
 
+  const getSocialHref = (platform: string, value: string) =>
+    platform === "email" ? `mailto:${value}` : value;
+
   const hasLinks = settings.menu_links.length > 0;
   const hasSocials = activeSocialLinks.length > 0;
 
   return (
     <footer
+      id="Footer"
       className={cn("w-full border-t bg-background", className)}
     >
       <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
@@ -65,9 +69,8 @@ export function Footer({ settings, className }: FooterProps) {
                     return (
                       <a
                         key={platform}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href={getSocialHref(platform, url)}
+                        {...(platform !== "email" && { target: "_blank", rel: "noopener noreferrer" })}
                         className="rounded-lg p-2 text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground"
                         aria-label={platform}
                       >

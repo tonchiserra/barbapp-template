@@ -18,7 +18,8 @@ export type SocialPlatform =
   | "whatsapp"
   | "x"
   | "youtube"
-  | "telegram";
+  | "telegram"
+  | "email";
 
 export interface MenuLink {
   label: string;
@@ -33,6 +34,7 @@ export interface SocialLinks {
   x: string | null;
   youtube: string | null;
   telegram: string | null;
+  email: string | null;
 }
 
 export interface HeaderSettings {
@@ -102,6 +104,20 @@ export interface MulticolumnSettings {
   cta_label: string;
   cta_url: string;
   cta_variant: ButtonVariant;
+  is_visible: boolean;
+}
+
+// --- Map ---
+
+export interface MapLocation {
+  name: string;
+  address: string;
+}
+
+export interface MapSettings {
+  title: string;
+  description: string;
+  locations: MapLocation[];
   is_visible: boolean;
 }
 
@@ -242,6 +258,7 @@ export interface SiteSettings {
   video: VideoSettings;
   gallery: GallerySettings;
   multicolumn: MulticolumnSettings;
+  map: MapSettings;
   booking: BookingSettings;
   created_at: string;
   updated_at: string;
@@ -260,6 +277,7 @@ export const DEFAULT_HEADER_SETTINGS: HeaderSettings = {
     x: null,
     youtube: null,
     telegram: null,
+    email: null,
   },
   is_visible: true,
 };
@@ -274,6 +292,7 @@ export const DEFAULT_FOOTER_SETTINGS: FooterSettings = {
     x: null,
     youtube: null,
     telegram: null,
+    email: null,
   },
   is_visible: true,
 };
@@ -311,6 +330,18 @@ export const DEFAULT_MULTICOLUMN_SETTINGS: MulticolumnSettings = {
   cta_label: "",
   cta_url: "",
   cta_variant: "primary",
+  is_visible: true,
+};
+
+export const DEFAULT_MAP_LOCATION: MapLocation = {
+  name: "",
+  address: "",
+};
+
+export const DEFAULT_MAP_SETTINGS: MapSettings = {
+  title: "",
+  description: "",
+  locations: [],
   is_visible: true,
 };
 
@@ -365,4 +396,5 @@ export const SOCIAL_PLATFORMS: {
   { key: "x", label: "X (Twitter)", placeholder: "https://x.com/tu_barberia" },
   { key: "youtube", label: "YouTube", placeholder: "https://youtube.com/@tu_barberia" },
   { key: "telegram", label: "Telegram", placeholder: "https://t.me/tu_barberia" },
+  { key: "email", label: "Email", placeholder: "tu@barberia.com" },
 ];
