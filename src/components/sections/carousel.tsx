@@ -54,9 +54,11 @@ export function Carousel({ settings, className }: CarouselProps) {
   // Auto-slide
   React.useEffect(() => {
     if (!settings.auto_slide || slides.length <= 1 || isPaused) return;
-    const timer = setInterval(() => goTo(current + 1), 5000);
+    const timer = setInterval(() => {
+      setCurrent((prev) => (prev + 1) % slides.length);
+    }, 5000);
     return () => clearInterval(timer);
-  }, [current, isPaused, slides.length, settings.auto_slide]);
+  }, [isPaused, slides.length, settings.auto_slide]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;

@@ -1,9 +1,24 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
+
 export const metadata: Metadata = {
-  title: "Turnos",
-  description: "Sistema de turnos para la atención al cliente",
+  title: {
+    default: "Barbapp — Reserva tu turno",
+    template: "%s | Barbapp",
+  },
+  description: "Reserva tu turno online de forma rapida y sencilla.",
+  robots: { index: true, follow: true },
+  openGraph: {
+    type: "website",
+    locale: "es_AR",
+    siteName: "Barbapp",
+  },
 };
 
 export default function RootLayout({

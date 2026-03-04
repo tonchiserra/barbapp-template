@@ -20,10 +20,7 @@ export function Multicolumn({ settings, className }: MulticolumnProps) {
           </Heading>
         )}
 
-        <div
-          className="w-full gap-4"
-          style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" }}
-        >
+        <div className="grid w-full grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {settings.blocks.map((block, index) => (
             <Block key={index} block={block} />
           ))}
