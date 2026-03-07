@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Button, Input, Heading, Text } from "@/components/ui";
 import {
@@ -11,7 +12,7 @@ import {
   createAppointment,
   validateDiscountCodeAction,
 } from "@/app/admin/turnero-actions";
-import type { BookingSettings, StaffMember } from "@/types";
+import type { BookingSettings, StaffMember, Branch } from "@/types";
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, format, addMonths, isSameMonth,
@@ -19,9 +20,7 @@ import {
 } from "date-fns";
 import { es } from "date-fns/locale";
 
-type BookingStep = "staff" | "service" | "date" | "time" | "contact" | "confirm" | "success";
-
-const STEP_LABELS = ["Profesional", "Servicio", "Fecha", "Hora", "Datos", "Confirmar"];
+type BookingStep = "branch" | "staff" | "service" | "date" | "time" | "contact" | "confirm" | "success";
 
 interface StaffService {
   id: string;
@@ -35,11 +34,23 @@ interface StaffService {
 interface BookingWidgetProps {
   settings: BookingSettings;
   staff: StaffMember[];
+  branches: Branch[];
   userId: string;
 }
 
-export function BookingWidget({ settings, staff: initialStaff, userId }: BookingWidgetProps) {
-  const [step, setStep] = React.useState<BookingStep>("staff");
+export function BookingWidget({ settings, staff: initialStaff, branches, userId }: BookingWidgetProps) {
+  const showBranchStep = branches.length > 1;
+  const firstStep: BookingStep = showBranchStep ? "branch" : "staff";
+
+  const stepLabels = showBranchStep
+    ? ["Sucursal", "Profesional", "Servicio", "Fecha", "Hora", "Datos", "Confirmar"]
+    : ["Profesional", "Servicio", "Fecha", "Hora", "Datos", "Confirmar"];
+  const stepKeys: BookingStep[] = showBranchStep
+    ? ["branch", "staff", "service", "date", "time", "contact", "confirm"]
+    : ["staff", "service", "date", "time", "contact", "confirm"];
+
+  const [step, setStep] = React.useState<BookingStep>(firstStep);
+  const [selectedBranch, setSelectedBranch] = React.useState<Branch | null>(null);
   const [selectedStaff, setSelectedStaff] = React.useState<StaffMember | null>(null);
   const [staffServices, setStaffServices] = React.useState<StaffService[]>([]);
   const [selectedService, setSelectedService] = React.useState<StaffService | null>(null);
@@ -65,12 +76,17 @@ export function BookingWidget({ settings, staff: initialStaff, userId }: Booking
   const [discountError, setDiscountError] = React.useState("");
   const [validatingDiscount, setValidatingDiscount] = React.useState(false);
 
-  const stepIndex = ["staff", "service", "date", "time", "contact", "confirm"].indexOf(step);
+  const stepIndex = stepKeys.indexOf(step);
 
-  // Auto-select if only 1 staff member
+  // Derive visible staff based on selected branch
+  const visibleStaff = selectedBranch
+    ? initialStaff.filter((s) => s.branch_id === selectedBranch.id)
+    : initialStaff;
+
+  // Auto-select if only 1 staff member (and no branch step)
   const autoSelected = React.useRef(false);
   React.useEffect(() => {
-    if (initialStaff.length === 1 && !autoSelected.current) {
+    if (!showBranchStep && initialStaff.length === 1 && !autoSelected.current) {
       autoSelected.current = true;
       handleSelectStaff(initialStaff[0]);
     }
@@ -79,11 +95,26 @@ export function BookingWidget({ settings, staff: initialStaff, userId }: Booking
 
   // --- Step handlers ---
 
+  function handleSelectBranch(branch: Branch) {
+    setSelectedBranch(branch);
+    setSelectedStaff(null);
+    setSelectedService(null);
+    setSelectedDate(null);
+    setSelectedTime(null);
+    const branchStaff = initialStaff.filter((s) => s.branch_id === branch.id);
+    if (branchStaff.length === 1) {
+      handleSelectStaff(branchStaff[0]);
+    } else {
+      setStep("staff");
+    }
+  }
+
   async function handleSelectStaff(member: StaffMember) {
     setSelectedStaff(member);
     setSelectedService(null);
     setSelectedDate(null);
     setSelectedTime(null);
+    setStep("service");
     setLoading(true);
 
     const [services, schedule, timeOffDates] = await Promise.all([
@@ -97,11 +128,12 @@ export function BookingWidget({ settings, staff: initialStaff, userId }: Booking
     setStaffTimeOffDates(timeOffDates);
     setLoading(false);
 
-    if (initialStaff.length === 1 && services.length === 1) {
+    const staffCount = selectedBranch
+      ? initialStaff.filter((s) => s.branch_id === selectedBranch.id).length
+      : initialStaff.length;
+    if (staffCount === 1 && services.length === 1) {
       setSelectedService(services[0]);
       setStep("date");
-    } else {
-      setStep("service");
     }
   }
 
@@ -181,22 +213,22 @@ export function BookingWidget({ settings, staff: initialStaff, userId }: Booking
   }
 
   function handleBack() {
-    const steps: BookingStep[] = ["staff", "service", "date", "time", "contact", "confirm"];
-    const currentIndex = steps.indexOf(step);
+    const currentIndex = stepKeys.indexOf(step);
     if (currentIndex > 0) {
-      // If we auto-skipped staff+service (only 1 of each), go back to staff
-      if (step === "date" && initialStaff.length === 1 && staffServices.length === 1) {
-        setStep("staff");
-      } else if (step === "service" && initialStaff.length === 1) {
-        setStep("staff");
+      // If we auto-skipped staff+service (only 1 of each), go back further
+      if (step === "date" && visibleStaff.length === 1 && staffServices.length === 1) {
+        setStep(showBranchStep ? "branch" : "staff");
+      } else if (step === "service" && visibleStaff.length === 1) {
+        setStep(showBranchStep ? "branch" : "staff");
       } else {
-        setStep(steps[currentIndex - 1]);
+        setStep(stepKeys[currentIndex - 1]);
       }
     }
   }
 
   function handleReset() {
-    setStep("staff");
+    setStep(firstStep);
+    setSelectedBranch(null);
     setSelectedStaff(null);
     setStaffServices([]);
     setSelectedService(null);
@@ -210,8 +242,8 @@ export function BookingWidget({ settings, staff: initialStaff, userId }: Booking
     setAppliedDiscount(null);
     setDiscountError("");
 
-    // Auto-select if only 1 staff
-    if (initialStaff.length === 1) {
+    // Auto-select if only 1 staff (and no branch step)
+    if (!showBranchStep && initialStaff.length === 1) {
       handleSelectStaff(initialStaff[0]);
     }
   }
@@ -235,7 +267,7 @@ export function BookingWidget({ settings, staff: initialStaff, userId }: Booking
     }
 
     return (
-      <section id="Turnero" className="flex w-full items-center justify-center py-16">
+      <section id="Turnero" className="flex min-h-[100dvh] w-full items-center justify-center pb-20 pt-4">
         <div className="mx-auto flex max-w-lg flex-col items-center gap-6 px-4 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8 text-green-600">
@@ -269,7 +301,7 @@ export function BookingWidget({ settings, staff: initialStaff, userId }: Booking
   }
 
   return (
-    <section id="Turnero" className="flex w-full items-center justify-center py-16">
+    <section id="Turnero" className="flex min-h-[100dvh] w-full items-center justify-center pb-20 pt-4">
       <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-8 px-4 sm:px-6 lg:px-8">
         {settings.title && (
           <Heading as="h2" className="text-center sm:text-4xl">
@@ -282,9 +314,17 @@ export function BookingWidget({ settings, staff: initialStaff, userId }: Booking
           </Text>
         )}
 
-        {/* Progress indicator */}
-        <div className="flex items-center gap-2">
-          {STEP_LABELS.map((label, i) => (
+        {/* Progress indicator — compact on mobile, full on desktop */}
+        <div className="flex items-center gap-1.5 sm:hidden">
+          <Text size="sm" variant="muted">
+            Paso {stepIndex + 1} de {stepLabels.length}
+          </Text>
+          <Text size="sm" className="font-medium">
+            — {stepLabels[stepIndex]}
+          </Text>
+        </div>
+        <div className="hidden items-center gap-2 sm:flex">
+          {stepLabels.map((label, i) => (
             <React.Fragment key={label}>
               {i > 0 && <div className={cn("h-px w-4", i <= stepIndex ? "bg-primary" : "bg-border")} />}
               <div className={cn(
@@ -306,7 +346,7 @@ export function BookingWidget({ settings, staff: initialStaff, userId }: Booking
         </div>
 
         {/* Back button */}
-        {step !== "staff" && (
+        {step !== firstStep && (
           <button
             onClick={handleBack}
             className="flex items-center gap-1.5 self-start text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -321,8 +361,11 @@ export function BookingWidget({ settings, staff: initialStaff, userId }: Booking
 
         {/* Step content */}
         <div className="w-full">
+          {step === "branch" && (
+            <BranchStep branches={branches} onSelect={handleSelectBranch} />
+          )}
           {step === "staff" && (
-            <StaffStep staff={initialStaff} onSelect={handleSelectStaff} loading={loading} />
+            <StaffStep staff={visibleStaff} onSelect={handleSelectStaff} loading={loading} />
           )}
           {step === "service" && (
             <ServiceStep services={staffServices} onSelect={handleSelectService} loading={loading} />
@@ -376,6 +419,33 @@ export function BookingWidget({ settings, staff: initialStaff, userId }: Booking
         </div>
       </div>
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step: Branch
+// ---------------------------------------------------------------------------
+
+function BranchStep({ branches, onSelect }: {
+  branches: Branch[];
+  onSelect: (b: Branch) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <Text size="sm" variant="muted" className="text-center">Selecciona una sucursal</Text>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {branches.map((branch) => (
+          <button
+            key={branch.id}
+            onClick={() => onSelect(branch)}
+            className="flex flex-col gap-1 rounded-2xl border p-4 text-left transition-all hover:border-primary hover:bg-primary/5"
+          >
+            <Text className="font-semibold">{branch.name}</Text>
+            {branch.address && <Text size="sm" variant="muted">{branch.address}</Text>}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -456,9 +526,15 @@ function StaffStep({ staff, onSelect, loading }: {
             onClick={() => onSelect(member)}
             className="flex flex-col items-center gap-2 rounded-2xl border p-4 transition-all hover:border-primary hover:bg-primary/5"
           >
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
-              {member.name.charAt(0).toUpperCase()}
-            </div>
+            {member.avatar_url ? (
+              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full border">
+                <Image src={member.avatar_url} alt={member.name} fill className="object-cover" />
+              </div>
+            ) : (
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
+                {member.name.charAt(0).toUpperCase()}
+              </div>
+            )}
             <Text size="sm" className="font-medium">{member.name}</Text>
           </button>
         ))}

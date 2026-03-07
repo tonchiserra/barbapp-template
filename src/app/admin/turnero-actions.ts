@@ -181,6 +181,7 @@ export async function updateStaff(
 
   const name = ((formData.get("name") as string) || "").trim();
   const avatarUrl = ((formData.get("avatar_url") as string) || "").trim();
+  const branchId = ((formData.get("branch_id") as string) || "").trim() || null;
   const isOwner = formData.get("is_owner") === "on";
   const isActive = formData.get("is_active") === "on";
 
@@ -188,7 +189,7 @@ export async function updateStaff(
 
   const { error } = await supabase
     .from("staff")
-    .update({ name, avatar_url: avatarUrl, is_owner: isOwner, is_active: isActive })
+    .update({ name, avatar_url: avatarUrl, branch_id: branchId, is_owner: isOwner, is_active: isActive })
     .eq("id", id)
     .eq("user_id", user.id);
 
@@ -247,6 +248,17 @@ export async function updateStaffSchedule(
 
   if (!staff) return { error: "Empleado no encontrado" };
 
+  // Delete all existing schedules and re-insert (supports multiple ranges per day)
+  const { error: delError } = await supabase
+    .from("staff_schedules")
+    .delete()
+    .eq("staff_id", staffId);
+
+  if (delError) {
+    console.error("updateStaffSchedule delete error:", delError);
+    return { error: "Error al actualizar los horarios" };
+  }
+
   const rows = schedules.map((s) => ({
     staff_id: staffId,
     day_of_week: s.day_of_week,
@@ -257,7 +269,7 @@ export async function updateStaffSchedule(
 
   const { error } = await supabase
     .from("staff_schedules")
-    .upsert(rows, { onConflict: "staff_id,day_of_week" });
+    .insert(rows);
 
   if (error) {
     console.error("updateStaffSchedule error:", error);
@@ -466,31 +478,41 @@ export async function updateAppointmentStatus(
     return { error: "Error al actualizar el turno" };
   }
 
+  // Fetch appointment data for client update + completion email
+  const { data: apt } = await supabase
+    .from("appointments")
+    .select("client_name, client_phone, client_email, date, start_time, service_id, staff_id")
+    .eq("id", appointmentId)
+    .single();
+
+  // Update client counters on status change (fire-and-forget)
+  if (apt && (status === "completed" || status === "cancelled" || status === "no_show")) {
+    supabase.rpc("update_client_on_status_change", {
+      p_user_id: user.id,
+      p_phone: apt.client_phone ?? "",
+      p_email: apt.client_email ?? "",
+    }).then(({ error: clientError }) => {
+      if (clientError) console.error("update_client_on_status_change error:", clientError);
+    });
+  }
+
   // Send completion email (fire-and-forget)
-  if (status === "completed") {
-    const { data: apt } = await supabase
-      .from("appointments")
-      .select("client_email, client_name, date, start_time, service_id, staff_id")
-      .eq("id", appointmentId)
-      .single();
+  if (status === "completed" && apt?.client_email) {
+    const [{ data: svc }, { data: staff }, emailSettings] = await Promise.all([
+      supabase.from("services").select("name").eq("id", apt.service_id).single(),
+      supabase.from("staff").select("name").eq("id", apt.staff_id).single(),
+      getEmailSettings(user.id),
+    ]);
 
-    if (apt?.client_email) {
-      const [{ data: svc }, { data: staff }, emailSettings] = await Promise.all([
-        supabase.from("services").select("name").eq("id", apt.service_id).single(),
-        supabase.from("staff").select("name").eq("id", apt.staff_id).single(),
-        getEmailSettings(user.id),
-      ]);
-
-      sendCompletionEmail({
-        to: apt.client_email,
-        clientName: apt.client_name,
-        serviceName: svc?.name ?? "Servicio",
-        staffName: staff?.name ?? "",
-        date: apt.date,
-        startTime: apt.start_time,
-        emailSettings,
-      }).catch((err) => console.error("Completion email error:", err));
-    }
+    sendCompletionEmail({
+      to: apt.client_email,
+      clientName: apt.client_name,
+      serviceName: svc?.name ?? "Servicio",
+      staffName: staff?.name ?? "",
+      date: apt.date,
+      startTime: apt.start_time,
+      emailSettings,
+    }).catch((err) => console.error("Completion email error:", err));
   }
 
   revalidatePath("/admin");
@@ -683,6 +705,8 @@ export async function createAppointment(
     p_phone: clientPhone,
     p_email: clientEmail,
     p_day_of_week: dayOfWeek,
+    p_service_id: serviceId,
+    p_staff_id: staffId,
   }).then(({ error: clientError }) => {
     if (clientError) console.error("upsert_client error:", clientError);
   });
@@ -694,10 +718,21 @@ export async function createAppointment(
 // Clients (paginated)
 // ---------------------------------------------------------------------------
 
+function mapClientDetails(row: Record<string, unknown>): import("@/types").ClientWithDetails {
+  return {
+    ...row,
+    top_service_name: (row.top_service as { name: string } | null)?.name ?? null,
+    top_staff_name: (row.top_staff as { name: string } | null)?.name ?? null,
+    top_branch_name: (row.top_branch as { name: string } | null)?.name ?? null,
+  } as import("@/types").ClientWithDetails;
+}
+
+const CLIENT_SELECT = `*, top_service:top_service_id(name), top_staff:top_staff_id(name), top_branch:top_branch_id(name)`;
+
 export async function getClientsAction(
   page: number = 1,
   pageSize: number = 20,
-): Promise<{ clients: import("@/types").Client[]; total: number }> {
+): Promise<{ clients: import("@/types").ClientWithDetails[]; total: number }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -709,18 +744,18 @@ export async function getClientsAction(
 
   const { data, count } = await supabase
     .from("clients")
-    .select("*", { count: "exact" })
+    .select(CLIENT_SELECT, { count: "exact" })
     .eq("user_id", user.id)
     .order("total_appointments", { ascending: false })
     .range(from, to);
 
   return {
-    clients: (data as import("@/types").Client[]) ?? [],
+    clients: (data ?? []).map(mapClientDetails),
     total: count ?? 0,
   };
 }
 
-export async function getAllClientsAction(): Promise<import("@/types").Client[]> {
+export async function getAllClientsAction(): Promise<import("@/types").ClientWithDetails[]> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -729,11 +764,11 @@ export async function getAllClientsAction(): Promise<import("@/types").Client[]>
 
   const { data } = await supabase
     .from("clients")
-    .select("*")
+    .select(CLIENT_SELECT)
     .eq("user_id", user.id)
     .order("total_appointments", { ascending: false });
 
-  return (data as import("@/types").Client[]) ?? [];
+  return (data ?? []).map(mapClientDetails);
 }
 
 // ---------------------------------------------------------------------------
@@ -891,4 +926,104 @@ export async function validateDiscountCodeAction(
     discount_code_id: data.id,
     discount_percent: data.discount_percent,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Branches
+// ---------------------------------------------------------------------------
+
+export async function createBranch(
+  _prev: ActionState | null,
+  formData: FormData,
+): Promise<ActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  const name = ((formData.get("name") as string) || "").trim();
+  const address = ((formData.get("address") as string) || "").trim();
+  const isActive = formData.get("is_active") === "on";
+
+  if (!name) return { error: "El nombre es obligatorio" };
+
+  const { error } = await supabase.from("branches").insert({
+    user_id: user.id,
+    name,
+    address,
+    is_active: isActive,
+  });
+
+  if (error) {
+    console.error("createBranch error:", error);
+    return { error: "Error al crear la sucursal" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function updateBranch(
+  _prev: ActionState | null,
+  formData: FormData,
+): Promise<ActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  const id = formData.get("id") as string;
+  if (!id) return { error: "ID de sucursal faltante" };
+
+  const name = ((formData.get("name") as string) || "").trim();
+  const address = ((formData.get("address") as string) || "").trim();
+  const isActive = formData.get("is_active") === "on";
+
+  if (!name) return { error: "El nombre es obligatorio" };
+
+  const { error } = await supabase
+    .from("branches")
+    .update({ name, address, is_active: isActive })
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("updateBranch error:", error);
+    return { error: "Error al actualizar la sucursal" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function deleteBranch(branchId: string): Promise<ActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  const { error } = await supabase
+    .from("branches")
+    .delete()
+    .eq("id", branchId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("deleteBranch error:", error);
+    return { error: "Error al eliminar la sucursal" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+// Public: get active branches for a user
+export async function getActiveBranchesAction(
+  userId: string,
+): Promise<import("@/types").Branch[]> {
+  const { getActiveBranches } = await import("@/lib/queries/branches");
+  return getActiveBranches(userId);
 }

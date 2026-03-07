@@ -3,13 +3,13 @@
 import * as React from "react";
 import { Button, Heading, Text, Badge, Card, CardContent } from "@/components/ui";
 import { getClientsAction, getAllClientsAction } from "@/app/admin/turnero-actions";
-import type { Client } from "@/types";
+import type { ClientWithDetails } from "@/types";
 import { DAY_NAMES } from "@/types";
 
 const PAGE_SIZE = 20;
 
 export function ClientsSettings() {
-  const [clients, setClients] = React.useState<Client[]>([]);
+  const [clients, setClients] = React.useState<ClientWithDetails[]>([]);
   const [total, setTotal] = React.useState(0);
   const [page, setPage] = React.useState(1);
   const [loading, setLoading] = React.useState(true);
@@ -33,13 +33,18 @@ export function ClientsSettings() {
     setExporting(true);
     const allClients = await getAllClientsAction();
 
-    const header = "Nombre,Telefono,Email,Turnos,Dia frecuente";
+    const header = "Nombre,Telefono,Email,Turnos,Dia frecuente,Servicio favorito,Profesional favorito,Metodo de pago,Sucursal,Ultima visita,No asistio,Cancelaciones";
     const rows = allClients.map((c) => {
       const topDay = getTopDay(c);
       const name = c.name.replace(/"/g, '""');
       const phone = (c.phone || "").replace(/"/g, '""');
       const email = (c.email || "").replace(/"/g, '""');
-      return `"${name}","${phone}","${email}",${c.total_appointments},"${topDay}"`;
+      const service = (c.top_service_name || "-").replace(/"/g, '""');
+      const staff = (c.top_staff_name || "-").replace(/"/g, '""');
+      const payment = formatPayment(c.top_payment_method);
+      const branch = (c.top_branch_name || "-").replace(/"/g, '""');
+      const lastVisit = c.last_visit_date ? formatDate(c.last_visit_date) : "-";
+      return `"${name}","${phone}","${email}",${c.total_appointments},"${topDay}","${service}","${staff}","${payment}","${branch}","${lastVisit}",${c.no_show_count},${c.cancellation_count}`;
     });
 
     const csv = [header, ...rows].join("\n");
@@ -53,7 +58,7 @@ export function ClientsSettings() {
     setExporting(false);
   }
 
-  function getTopDay(client: Client): string {
+  function getTopDay(client: ClientWithDetails): string {
     const counts = [
       client.dow_0, client.dow_1, client.dow_2, client.dow_3,
       client.dow_4, client.dow_5, client.dow_6,
@@ -62,6 +67,17 @@ export function ClientsSettings() {
     if (max === 0) return "-";
     const dayIndex = counts.indexOf(max);
     return DAY_NAMES[dayIndex];
+  }
+
+  function formatPayment(method: string | null): string {
+    if (method === "cash") return "Efectivo";
+    if (method === "transfer") return "Transferencia";
+    return "-";
+  }
+
+  function formatDate(dateStr: string): string {
+    const [y, m, d] = dateStr.split("-");
+    return `${d}/${m}/${y}`;
   }
 
   if (loading && clients.length === 0) {
@@ -93,22 +109,50 @@ export function ClientsSettings() {
           <thead>
             <tr className="border-b bg-muted/50">
               <th className="px-4 py-3 text-left font-medium">Nombre</th>
-              <th className="px-4 py-3 text-left font-medium">Telefono</th>
-              <th className="px-4 py-3 text-left font-medium">Email</th>
-              <th className="px-4 py-3 text-center font-medium">Cortes</th>
-              <th className="px-4 py-3 text-center font-medium">Dia frecuente</th>
+              <th className="hidden px-4 py-3 text-left font-medium md:table-cell">Telefono</th>
+              <th className="hidden px-4 py-3 text-left font-medium md:table-cell">Email</th>
+              <th className="px-4 py-3 text-center font-medium">Turnos</th>
+              <th className="hidden px-4 py-3 text-left font-medium md:table-cell">Servicio fav.</th>
+              <th className="hidden px-4 py-3 text-left font-medium md:table-cell">Profesional fav.</th>
+              <th className="hidden px-4 py-3 text-center font-medium md:table-cell">Pago</th>
+              <th className="hidden px-4 py-3 text-center font-medium md:table-cell">Sucursal</th>
+              <th className="hidden px-4 py-3 text-center font-medium md:table-cell">Dia frec.</th>
+              <th className="px-4 py-3 text-center font-medium">Ultima visita</th>
+              <th className="hidden px-4 py-3 text-center font-medium md:table-cell">Ausencias</th>
+              <th className="hidden px-4 py-3 text-center font-medium md:table-cell">Cancelaciones</th>
             </tr>
           </thead>
           <tbody>
             {clients.map((client) => (
               <tr key={client.id} className="border-b last:border-0 transition-colors hover:bg-accent/50">
                 <td className="px-4 py-3 font-medium">{client.name}</td>
-                <td className="px-4 py-3 text-muted-foreground">{client.phone || "-"}</td>
-                <td className="px-4 py-3 text-muted-foreground">{client.email || "-"}</td>
+                <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{client.phone || "-"}</td>
+                <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{client.email || "-"}</td>
                 <td className="px-4 py-3 text-center">
                   <Badge variant="secondary">{client.total_appointments}</Badge>
                 </td>
-                <td className="px-4 py-3 text-center text-muted-foreground">{getTopDay(client)}</td>
+                <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{client.top_service_name || "-"}</td>
+                <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{client.top_staff_name || "-"}</td>
+                <td className="hidden px-4 py-3 text-center text-muted-foreground md:table-cell">{formatPayment(client.top_payment_method)}</td>
+                <td className="hidden px-4 py-3 text-center text-muted-foreground md:table-cell">{client.top_branch_name || "-"}</td>
+                <td className="hidden px-4 py-3 text-center text-muted-foreground md:table-cell">{getTopDay(client)}</td>
+                <td className="px-4 py-3 text-center text-muted-foreground">
+                  {client.last_visit_date ? formatDate(client.last_visit_date) : "-"}
+                </td>
+                <td className="hidden px-4 py-3 text-center md:table-cell">
+                  {client.no_show_count > 0 ? (
+                    <Badge variant="destructive">{client.no_show_count}</Badge>
+                  ) : (
+                    <span className="text-muted-foreground">0</span>
+                  )}
+                </td>
+                <td className="hidden px-4 py-3 text-center md:table-cell">
+                  {client.cancellation_count > 0 ? (
+                    <Badge variant="outline">{client.cancellation_count}</Badge>
+                  ) : (
+                    <span className="text-muted-foreground">0</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

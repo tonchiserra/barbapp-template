@@ -1,7 +1,7 @@
 import { getPublicSiteSettings } from "@/lib/queries/site-settings";
 import { getActiveStaff } from "@/lib/queries/staff";
+import { getActiveBranches } from "@/lib/queries/branches";
 import { DEFAULT_BOOKING_SETTINGS } from "@/types";
-import type { BookingSettings, StaffMember } from "@/types";
 import { BookingWidget } from "./booking-widget";
 
 export async function Booking() {
@@ -13,7 +13,10 @@ export async function Booking() {
   const userId = siteSettings?.user_id;
   if (!userId) return null;
 
-  const staff = await getActiveStaff(userId);
+  const [staff, branches] = await Promise.all([
+    getActiveStaff(userId),
+    getActiveBranches(userId),
+  ]);
 
   if (staff.length === 0) return null;
 
@@ -21,6 +24,7 @@ export async function Booking() {
     <BookingWidget
       settings={bookingSettings}
       staff={staff}
+      branches={branches}
       userId={userId}
     />
   );

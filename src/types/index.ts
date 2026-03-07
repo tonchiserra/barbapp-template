@@ -176,11 +176,23 @@ export interface Service {
   updated_at: string;
 }
 
+export interface Branch {
+  id: string;
+  user_id: string;
+  name: string;
+  address: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface StaffMember {
   id: string;
   user_id: string;
   name: string;
   avatar_url: string;
+  branch_id: string | null;
   is_owner: boolean;
   is_active: boolean;
   sort_order: number;
@@ -275,8 +287,21 @@ export interface Client {
   dow_4: number;
   dow_5: number;
   dow_6: number;
+  top_service_id: string | null;
+  top_staff_id: string | null;
+  top_payment_method: string | null;
+  top_branch_id: string | null;
+  last_visit_date: string | null;
+  no_show_count: number;
+  cancellation_count: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface ClientWithDetails extends Client {
+  top_service_name: string | null;
+  top_staff_name: string | null;
+  top_branch_name: string | null;
 }
 
 export interface SiteSettings {

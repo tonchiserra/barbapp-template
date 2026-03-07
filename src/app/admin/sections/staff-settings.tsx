@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import {
   Button, Input, Textarea, Switch, Badge,
   Card, CardHeader, CardContent,
   Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
   Heading, Text, useToast,
 } from "@/components/ui";
+import { uploadImage, deleteImage, validateImageFile } from "@/lib/storage";
 import {
   createStaff, updateStaff, deleteStaff,
   createService, updateService, deleteService,
@@ -15,7 +17,7 @@ import {
   addStaffTimeOff, removeStaffTimeOff,
   addStaffBlockedTime, removeStaffBlockedTime,
 } from "@/app/admin/turnero-actions";
-import type { StaffMember, Service, StaffSchedule, StaffTimeOff, StaffBlockedTime } from "@/types";
+import type { StaffMember, Branch, Service, StaffSchedule, StaffTimeOff, StaffBlockedTime } from "@/types";
 import { DAY_NAMES } from "@/types";
 
 interface StaffSettingsProps {
@@ -23,9 +25,10 @@ interface StaffSettingsProps {
   staffSchedules: StaffSchedule[];
   staffTimeOff: StaffTimeOff[];
   staffBlockedTimes: StaffBlockedTime[];
+  branches: Branch[];
 }
 
-export function StaffSettings({ staff, staffSchedules, staffTimeOff, staffBlockedTimes }: StaffSettingsProps) {
+export function StaffSettings({ staff, staffSchedules, staffTimeOff, staffBlockedTimes, branches }: StaffSettingsProps) {
   const [selectedStaffId, setSelectedStaffId] = React.useState<string | null>(null);
 
   const selectedStaff = staff.find((s) => s.id === selectedStaffId);
@@ -37,6 +40,7 @@ export function StaffSettings({ staff, staffSchedules, staffTimeOff, staffBlocke
         schedules={staffSchedules.filter((s) => s.staff_id === selectedStaff.id)}
         timeOff={staffTimeOff.filter((t) => t.staff_id === selectedStaff.id)}
         blockedTimes={staffBlockedTimes.filter((bt) => bt.staff_id === selectedStaff.id)}
+        branches={branches}
         onBack={() => setSelectedStaffId(null)}
       />
     );
@@ -45,6 +49,7 @@ export function StaffSettings({ staff, staffSchedules, staffTimeOff, staffBlocke
   return (
     <StaffList
       staff={staff}
+      branches={branches}
       onSelect={(id) => setSelectedStaffId(id)}
     />
   );
@@ -54,7 +59,7 @@ export function StaffSettings({ staff, staffSchedules, staffTimeOff, staffBlocke
 // Staff List
 // ---------------------------------------------------------------------------
 
-function StaffList({ staff, onSelect }: { staff: StaffMember[]; onSelect: (id: string) => void }) {
+function StaffList({ staff, branches, onSelect }: { staff: StaffMember[]; branches: Branch[]; onSelect: (id: string) => void }) {
   const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [pending, setPending] = React.useState(false);
@@ -84,17 +89,30 @@ function StaffList({ staff, onSelect }: { staff: StaffMember[]; onSelect: (id: s
           <Card key={member.id} className="cursor-pointer transition-colors hover:bg-accent/50" onClick={() => onSelect(member.id)}>
             <CardHeader className="flex-row items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                  {member.name.charAt(0).toUpperCase()}
-                </div>
+                {member.avatar_url ? (
+                  <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border">
+                    <Image src={member.avatar_url} alt={member.name} fill className="object-cover" />
+                  </div>
+                ) : (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                    {member.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-2">
                     <Heading as="h3" className="text-base">{member.name}</Heading>
                     {member.is_owner && <Badge variant="default">Owner</Badge>}
                   </div>
-                  <Badge variant={member.is_active ? "secondary" : "outline"}>
-                    {member.is_active ? "Activo" : "Inactivo"}
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant={member.is_active ? "secondary" : "outline"}>
+                      {member.is_active ? "Activo" : "Inactivo"}
+                    </Badge>
+                    {member.branch_id && branches.find((b) => b.id === member.branch_id) && (
+                      <Text size="sm" variant="muted">
+                        {branches.find((b) => b.id === member.branch_id)!.name}
+                      </Text>
+                    )}
+                  </div>
                 </div>
               </div>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-muted-foreground">
@@ -157,12 +175,14 @@ function StaffDetail({
   schedules,
   timeOff,
   blockedTimes,
+  branches,
   onBack,
 }: {
   staff: StaffMember;
   schedules: StaffSchedule[];
   timeOff: StaffTimeOff[];
   blockedTimes: StaffBlockedTime[];
+  branches: Branch[];
   onBack: () => void;
 }) {
   const { toast } = useToast();
@@ -173,6 +193,41 @@ function StaffDetail({
   const [name, setName] = React.useState(staff.name);
   const [isOwner, setIsOwner] = React.useState(staff.is_owner);
   const [isActive, setIsActive] = React.useState(staff.is_active);
+  const [avatarUrl, setAvatarUrl] = React.useState(staff.avatar_url || "");
+  const [branchId, setBranchId] = React.useState(staff.branch_id || "");
+  const [avatarUploading, setAvatarUploading] = React.useState(false);
+  const avatarInputRef = React.useRef<HTMLInputElement>(null);
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      toast(validation.error!, "error");
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+      return;
+    }
+    setAvatarUploading(true);
+    const result = await uploadImage(file, "images", `${staff.user_id}/staff/${staff.id}`);
+    setAvatarUploading(false);
+    if (avatarInputRef.current) avatarInputRef.current.value = "";
+    if (result.error) {
+      toast(result.error, "error");
+    } else if (result.url) {
+      setAvatarUrl(result.url);
+    }
+  }
+
+  async function handleAvatarRemove() {
+    setAvatarUploading(true);
+    const result = await deleteImage("images", `${staff.user_id}/staff/${staff.id}`);
+    setAvatarUploading(false);
+    if (result.error) {
+      toast(result.error, "error");
+    } else {
+      setAvatarUrl("");
+    }
+  }
 
   async function handleSaveGeneral(e: React.FormEvent) {
     e.preventDefault();
@@ -180,6 +235,8 @@ function StaffDetail({
     const fd = new FormData();
     fd.set("id", staff.id);
     fd.set("name", name);
+    fd.set("avatar_url", avatarUrl);
+    fd.set("branch_id", branchId);
     if (isOwner) fd.set("is_owner", "on");
     if (isActive) fd.set("is_active", "on");
     const result = await updateStaff(null, fd);
@@ -200,31 +257,74 @@ function StaffDetail({
     }
   }
 
-  // --- Schedule ---
-  const [localSchedules, setLocalSchedules] = React.useState(
+  // --- Schedule (supports multiple ranges per day) ---
+  const [localSchedules, setLocalSchedules] = React.useState(() =>
     DAY_NAMES.map((_, i) => {
-      const existing = schedules.find((s) => s.day_of_week === i);
+      const dayRows = schedules.filter((s) => s.day_of_week === i);
+      const isWorking = dayRows.length > 0 ? dayRows.some((s) => s.is_working) : (i >= 1 && i <= 5);
+      const ranges = dayRows
+        .filter((s) => s.is_working)
+        .map((s) => ({ start_time: s.start_time.slice(0, 5), end_time: s.end_time.slice(0, 5) }));
+
       return {
         day_of_week: i,
-        start_time: existing?.start_time?.slice(0, 5) || "09:00",
-        end_time: existing?.end_time?.slice(0, 5) || "18:00",
-        is_working: existing?.is_working ?? (i >= 1 && i <= 5),
+        is_working: isWorking,
+        ranges: ranges.length > 0 ? ranges : [{ start_time: "09:00", end_time: "18:00" }],
       };
     }),
   );
 
-  function updateScheduleField(dayIndex: number, field: string, value: string | boolean) {
-    setLocalSchedules((prev) => prev.map((s) => (s.day_of_week === dayIndex ? { ...s, [field]: value } : s)));
+  function toggleDayWorking(dayIndex: number, working: boolean) {
+    setLocalSchedules((prev) => prev.map((d) => d.day_of_week === dayIndex ? { ...d, is_working: working } : d));
+  }
+
+  function updateRange(dayIndex: number, rangeIndex: number, field: "start_time" | "end_time", value: string) {
+    setLocalSchedules((prev) =>
+      prev.map((d) =>
+        d.day_of_week === dayIndex
+          ? { ...d, ranges: d.ranges.map((r, i) => (i === rangeIndex ? { ...r, [field]: value } : r)) }
+          : d,
+      ),
+    );
+  }
+
+  function addRange(dayIndex: number) {
+    setLocalSchedules((prev) =>
+      prev.map((d) =>
+        d.day_of_week === dayIndex
+          ? { ...d, ranges: [...d.ranges, { start_time: "14:00", end_time: "18:00" }] }
+          : d,
+      ),
+    );
+  }
+
+  function removeRange(dayIndex: number, rangeIndex: number) {
+    setLocalSchedules((prev) =>
+      prev.map((d) =>
+        d.day_of_week === dayIndex
+          ? { ...d, ranges: d.ranges.filter((_, i) => i !== rangeIndex) }
+          : d,
+      ),
+    );
   }
 
   async function handleSaveSchedule() {
     setPending(true);
-    const rows = localSchedules.map((s) => ({
-      day_of_week: s.day_of_week,
-      start_time: s.start_time + ":00",
-      end_time: s.end_time + ":00",
-      is_working: s.is_working,
-    }));
+    const rows: { day_of_week: number; start_time: string; end_time: string; is_working: boolean }[] = [];
+    for (const day of localSchedules) {
+      if (day.is_working) {
+        for (const range of day.ranges) {
+          rows.push({
+            day_of_week: day.day_of_week,
+            start_time: range.start_time + ":00",
+            end_time: range.end_time + ":00",
+            is_working: true,
+          });
+        }
+      } else {
+        rows.push({ day_of_week: day.day_of_week, start_time: "09:00:00", end_time: "18:00:00", is_working: false });
+      }
+    }
     const result = await updateStaffSchedule(staff.id, rows);
     setPending(false);
     if (result.success) toast("Horarios guardados", "success");
@@ -306,6 +406,46 @@ function StaffDetail({
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSaveGeneral} className="flex flex-col gap-4">
+            {/* Avatar */}
+            <div className="flex items-center gap-4">
+              {avatarUrl ? (
+                <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border">
+                  <Image src={avatarUrl} alt={name} fill className="object-cover" />
+                </div>
+              ) : (
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-primary/10 text-2xl font-semibold text-primary">
+                  {name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="flex flex-col items-start gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={avatarUploading}
+                  className="text-sm font-medium text-primary hover:text-primary/80 disabled:opacity-40"
+                >
+                  {avatarUploading ? "Subiendo..." : avatarUrl ? "Cambiar foto" : "Subir foto"}
+                </button>
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={handleAvatarRemove}
+                    disabled={avatarUploading}
+                    className="text-sm font-medium text-destructive hover:text-destructive/80 disabled:opacity-40"
+                  >
+                    Eliminar
+                  </button>
+                )}
+              </div>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleAvatarChange}
+                className="hidden"
+              />
+            </div>
+
             <Input label="Nombre" value={name} onChange={(e) => setName(e.target.value)} required />
             <div className="flex items-center justify-between rounded-xl border p-3">
               <Text size="sm">Es el dueño</Text>
@@ -315,6 +455,21 @@ function StaffDetail({
               <Text size="sm">Activo</Text>
               <Switch checked={isActive} onCheckedChange={setIsActive} />
             </div>
+            {branches.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <Text size="sm" className="font-medium">Sucursal</Text>
+                <select
+                  value={branchId}
+                  onChange={(e) => setBranchId(e.target.value)}
+                  className="rounded-xl border bg-background px-3 py-2.5 text-sm"
+                >
+                  <option value="">Sin sucursal</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="flex gap-2">
               <Button type="submit" disabled={pending} className="flex-1">
                 {pending ? "Guardando..." : "Guardar"}
@@ -337,33 +492,58 @@ function StaffDetail({
           <Text size="sm" variant="muted">Configura los dias y horarios de trabajo.</Text>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          {localSchedules.map((sched) => (
-            <div key={sched.day_of_week} className="flex items-center gap-3 rounded-xl border p-3">
-              <Switch
-                checked={sched.is_working}
-                onCheckedChange={(v) => updateScheduleField(sched.day_of_week, "is_working", v)}
-              />
-              <Text size="sm" className="w-24 font-medium">
-                {DAY_NAMES[sched.day_of_week]}
-              </Text>
-              {sched.is_working ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="time"
-                    value={sched.start_time}
-                    onChange={(e) => updateScheduleField(sched.day_of_week, "start_time", e.target.value)}
-                    className="rounded-lg border bg-background px-2 py-1.5 text-sm"
-                  />
-                  <Text size="sm" variant="muted">a</Text>
-                  <input
-                    type="time"
-                    value={sched.end_time}
-                    onChange={(e) => updateScheduleField(sched.day_of_week, "end_time", e.target.value)}
-                    className="rounded-lg border bg-background px-2 py-1.5 text-sm"
-                  />
+          {localSchedules.map((day) => (
+            <div key={day.day_of_week} className="flex flex-col gap-2 rounded-xl border p-3">
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={day.is_working}
+                  onCheckedChange={(v) => toggleDayWorking(day.day_of_week, v)}
+                />
+                <Text size="sm" className="w-24 font-medium">
+                  {DAY_NAMES[day.day_of_week]}
+                </Text>
+                {!day.is_working && <Text size="sm" variant="muted">Dia libre</Text>}
+              </div>
+              {day.is_working && (
+                <div className="flex flex-col gap-2">
+                  {day.ranges.map((range, ri) => (
+                    <div key={ri} className="flex items-center gap-2">
+                      <input
+                        type="time"
+                        value={range.start_time}
+                        onChange={(e) => updateRange(day.day_of_week, ri, "start_time", e.target.value)}
+                        className="rounded-lg border bg-background px-2 py-1.5 text-sm"
+                      />
+                      <Text size="sm" variant="muted">a</Text>
+                      <input
+                        type="time"
+                        value={range.end_time}
+                        onChange={(e) => updateRange(day.day_of_week, ri, "end_time", e.target.value)}
+                        className="rounded-lg border bg-background px-2 py-1.5 text-sm"
+                      />
+                      {day.ranges.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeRange(day.day_of_week, ri)}
+                          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-red-500"
+                          title="Eliminar rango"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                            <path d="M18 6 6 18" />
+                            <path d="m6 6 12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => addRange(day.day_of_week)}
+                    className="flex items-center gap-1 self-start rounded-lg px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                  >
+                    + Agregar rango
+                  </button>
                 </div>
-              ) : (
-                <Text size="sm" variant="muted">Dia libre</Text>
               )}
             </div>
           ))}
