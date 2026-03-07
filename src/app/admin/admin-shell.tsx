@@ -128,18 +128,6 @@ const TURNERO_SECTIONS = [
     ),
   },
   {
-    href: "/admin/servicios",
-    label: "Servicios",
-    description: "Servicios que ofreces",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-        <path d="M9 5H2v7l6.29 6.29c.94.94 2.48.94 3.42 0l3.58-3.58c.94-.94.94-2.48 0-3.42L9 5Z" />
-        <path d="M6 9.01V9" />
-        <path d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19" />
-      </svg>
-    ),
-  },
-  {
     href: "/admin/equipo",
     label: "Equipo",
     description: "Empleados y horarios",
@@ -162,6 +150,19 @@ const TURNERO_SECTIONS = [
         <circle cx="9" cy="7" r="4" />
         <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
         <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    ),
+  },
+  {
+    href: "/admin/cupones",
+    label: "Cupones",
+    description: "Codigos de descuento",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+        <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+        <path d="M13 5v2" />
+        <path d="M13 17v2" />
+        <path d="M13 11v2" />
       </svg>
     ),
   },

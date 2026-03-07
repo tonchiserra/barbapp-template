@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths } from "date-fns";
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths, addDays } from "date-fns";
 import { es } from "date-fns/locale";
-import { getAppointmentsByDate, getAppointmentsForRange, getNextAppointment } from "@/lib/queries/appointments";
+import { getAppointmentsForRangeWithDetails, getAppointmentsForRange } from "@/lib/queries/appointments";
+import { getActiveStaff } from "@/lib/queries/staff";
 import { BookingDashboard } from "../sections/booking-dashboard";
 
 export default async function DashboardPage({
@@ -20,7 +21,9 @@ export default async function DashboardPage({
   const params = await searchParams;
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd");
-  const activeStatuses = ["confirmed", "completed"];
+
+  // 7-day agenda range
+  const weekAheadStr = format(addDays(today, 6), "yyyy-MM-dd");
 
   // Current week & month
   const weekStart = format(startOfWeek(today, { weekStartsOn: 1 }), "yyyy-MM-dd");
@@ -41,12 +44,12 @@ export default async function DashboardPage({
 
   // Fetch all in parallel
   const fetches: Promise<unknown>[] = [
-    getAppointmentsByDate(user.id, todayStr),
+    getAppointmentsForRangeWithDetails(user.id, todayStr, weekAheadStr),
     getAppointmentsForRange(user.id, weekStart, weekEnd),
     getAppointmentsForRange(user.id, monthStart, monthEnd),
-    getNextAppointment(user.id),
     getAppointmentsForRange(user.id, prevWeekStart, prevWeekEnd),
     getAppointmentsForRange(user.id, prevMonthStart, prevMonthEnd),
+    getActiveStaff(user.id),
   ];
 
   if (historicalMonthStr) {
@@ -59,61 +62,35 @@ export default async function DashboardPage({
 
   const results = await Promise.all(fetches);
 
-  const todayAppointments = results[0] as Awaited<ReturnType<typeof getAppointmentsByDate>>;
+  const upcomingAppointments = results[0] as Awaited<ReturnType<typeof getAppointmentsForRangeWithDetails>>;
   const weekAppointments = results[1] as Awaited<ReturnType<typeof getAppointmentsForRange>>;
   const monthAppointments = results[2] as Awaited<ReturnType<typeof getAppointmentsForRange>>;
-  const nextAppointment = results[3] as Awaited<ReturnType<typeof getNextAppointment>>;
-  const prevWeekAppointments = results[4] as Awaited<ReturnType<typeof getAppointmentsForRange>>;
-  const prevMonthAppointments = results[5] as Awaited<ReturnType<typeof getAppointmentsForRange>>;
+  const prevWeekAppointments = results[3] as Awaited<ReturnType<typeof getAppointmentsForRange>>;
+  const prevMonthAppointments = results[4] as Awaited<ReturnType<typeof getAppointmentsForRange>>;
+  const staff = results[5] as Awaited<ReturnType<typeof getActiveStaff>>;
 
-  // Current metrics
-  const weekActive = weekAppointments.filter((a) => activeStatuses.includes(a.status));
-  const weekCount = weekActive.length;
-  const weekRevenue = weekActive.reduce((sum, a) => sum + Number(a.price), 0);
+  const historicalAppointments = historicalMonthStr
+    ? (results[results.length - 1] as Awaited<ReturnType<typeof getAppointmentsForRange>>)
+    : null;
 
-  const monthActive = monthAppointments.filter((a) => activeStatuses.includes(a.status));
-  const monthCount = monthActive.length;
-  const monthRevenue = monthActive.reduce((sum, a) => sum + Number(a.price), 0);
-
-  // Previous metrics
-  const prevWeekRevenue = prevWeekAppointments
-    .filter((a) => activeStatuses.includes(a.status))
-    .reduce((sum, a) => sum + Number(a.price), 0);
-  const prevMonthRevenue = prevMonthAppointments
-    .filter((a) => activeStatuses.includes(a.status))
-    .reduce((sum, a) => sum + Number(a.price), 0);
-
-  // Historical metrics
   let historicalLabel: string | null = null;
-  let historicalRevenue: number | null = null;
-  let historicalCount: number | null = null;
-  let historicalCompletedCount: number | null = null;
-
   if (historicalMonthStr) {
-    const hAppointments = results[6] as Awaited<ReturnType<typeof getAppointmentsForRange>>;
-    const hActive = hAppointments.filter((a) => activeStatuses.includes(a.status));
-    historicalRevenue = hActive.reduce((sum, a) => sum + Number(a.price), 0);
-    historicalCount = hActive.length;
-    historicalCompletedCount = hAppointments.filter((a) => a.status === "completed").length;
     const [lYear, lMonth] = historicalMonthStr.split("-").map(Number);
     historicalLabel = format(new Date(lYear, lMonth - 1, 1), "MMMM yyyy", { locale: es });
   }
 
   return (
     <BookingDashboard
-      todayAppointments={todayAppointments}
-      nextAppointment={nextAppointment}
-      weekCount={weekCount}
-      monthCount={monthCount}
-      monthRevenue={monthRevenue}
-      weekRevenue={weekRevenue}
-      prevWeekRevenue={prevWeekRevenue}
-      prevMonthRevenue={prevMonthRevenue}
+      upcomingAppointments={upcomingAppointments}
+      weekAppointments={weekAppointments}
+      monthAppointments={monthAppointments}
+      prevWeekAppointments={prevWeekAppointments}
+      prevMonthAppointments={prevMonthAppointments}
+      historicalAppointments={historicalAppointments}
+      staff={staff}
+      todayStr={todayStr}
       historicalMonth={historicalMonthStr}
       historicalLabel={historicalLabel}
-      historicalRevenue={historicalRevenue}
-      historicalCount={historicalCount}
-      historicalCompletedCount={historicalCompletedCount}
     />
   );
 }

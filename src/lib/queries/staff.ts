@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { StaffMember, StaffService, StaffSchedule, StaffTimeOff, StaffBlockedTime } from "@/types";
+import type { StaffMember, StaffSchedule, StaffTimeOff, StaffBlockedTime } from "@/types";
 
 export async function getStaff(userId: string): Promise<StaffMember[]> {
   const supabase = await createClient();
@@ -24,20 +24,6 @@ export async function getActiveStaff(userId: string): Promise<StaffMember[]> {
   return (data as StaffMember[]) ?? [];
 }
 
-export async function getStaffForService(serviceId: string): Promise<StaffMember[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("staff_services")
-    .select("staff:staff_id(*)")
-    .eq("service_id", serviceId);
-
-  if (!data) return [];
-
-  return (data as unknown as { staff: StaffMember }[])
-    .map((row) => row.staff)
-    .filter((s) => s.is_active);
-}
-
 export async function getStaffSchedule(staffId: string): Promise<StaffSchedule[]> {
   const supabase = await createClient();
   const { data } = await supabase
@@ -47,18 +33,6 @@ export async function getStaffSchedule(staffId: string): Promise<StaffSchedule[]
     .order("day_of_week");
 
   return (data as StaffSchedule[]) ?? [];
-}
-
-export async function getAllStaffServices(userId: string): Promise<StaffService[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("staff_services")
-    .select("*, staff!inner(user_id)")
-    .eq("staff.user_id", userId);
-
-  if (!data) return [];
-
-  return data.map(({ staff: _staff, ...rest }) => rest as StaffService);
 }
 
 export async function getAllStaffSchedules(userId: string): Promise<StaffSchedule[]> {
@@ -104,3 +78,4 @@ export async function getAllStaffBlockedTimes(userId: string): Promise<StaffBloc
 
   return data.map(({ staff: _staff, ...rest }) => rest as StaffBlockedTime);
 }
+

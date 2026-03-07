@@ -8,18 +8,49 @@ export async function getAppointmentsByDate(
   const supabase = await createClient();
   const { data } = await supabase
     .from("appointments")
-    .select("*, staff:staff_id(name), service:service_id(name)")
+    .select("*, staff:staff_id(name), service:service_id(name, price_transfer)")
     .eq("user_id", userId)
     .eq("date", date)
     .order("start_time");
 
   if (!data) return [];
 
-  return data.map((row) => ({
-    ...row,
-    staff_name: (row.staff as unknown as { name: string }).name,
-    service_name: (row.service as unknown as { name: string }).name,
-  })) as AppointmentWithDetails[];
+  return data.map((row) => {
+    const svc = row.service as unknown as { name: string; price_transfer: number };
+    return {
+      ...row,
+      staff_name: (row.staff as unknown as { name: string }).name,
+      service_name: svc.name,
+      service_price_transfer: svc.price_transfer,
+    };
+  }) as AppointmentWithDetails[];
+}
+
+export async function getAppointmentsForRangeWithDetails(
+  userId: string,
+  startDate: string,
+  endDate: string,
+): Promise<AppointmentWithDetails[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("appointments")
+    .select("*, staff:staff_id(name), service:service_id(name, price_transfer)")
+    .eq("user_id", userId)
+    .gte("date", startDate)
+    .lte("date", endDate)
+    .order("start_time");
+
+  if (!data) return [];
+
+  return data.map((row) => {
+    const svc = row.service as unknown as { name: string; price_transfer: number };
+    return {
+      ...row,
+      staff_name: (row.staff as unknown as { name: string }).name,
+      service_name: svc.name,
+      service_price_transfer: svc.price_transfer,
+    };
+  }) as AppointmentWithDetails[];
 }
 
 export async function getAppointmentsForRange(
@@ -45,7 +76,7 @@ export async function getNextAppointment(
   const today = new Date().toISOString().split("T")[0];
   const { data } = await supabase
     .from("appointments")
-    .select("*, staff:staff_id(name), service:service_id(name)")
+    .select("*, staff:staff_id(name), service:service_id(name, price_transfer)")
     .eq("user_id", userId)
     .eq("status", "confirmed")
     .gte("date", today)
@@ -56,10 +87,12 @@ export async function getNextAppointment(
 
   if (!data) return null;
 
+  const svc = data.service as unknown as { name: string; price_transfer: number };
   return {
     ...data,
     staff_name: (data.staff as unknown as { name: string }).name,
-    service_name: (data.service as unknown as { name: string }).name,
+    service_name: svc.name,
+    service_price_transfer: svc.price_transfer,
   } as AppointmentWithDetails;
 }
 

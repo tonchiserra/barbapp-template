@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { sendCompletionEmail } from "@/lib/email";
 import { getEmailSettings } from "@/lib/queries/site-settings";
-import type { AppointmentStatus } from "@/types";
+import type { AppointmentStatus, PaymentMethod } from "@/types";
 import { DEFAULT_SCHEDULE } from "@/types";
 
 export interface ActionState {
@@ -26,9 +26,13 @@ export async function createService(
   } = await supabase.auth.getUser();
   if (!user) return { error: "No autenticado" };
 
+  const staffId = formData.get("staff_id") as string;
+  if (!staffId) return { error: "Empleado faltante" };
+
   const name = ((formData.get("name") as string) || "").trim();
   const description = ((formData.get("description") as string) || "").trim();
-  const price = parseFloat((formData.get("price") as string) || "0") || 0;
+  const priceTransfer = parseFloat((formData.get("price_transfer") as string) || "0") || 0;
+  const priceCash = parseFloat((formData.get("price_cash") as string) || "0") || 0;
   const durationMinutes = parseInt((formData.get("duration_minutes") as string) || "30", 10) || 30;
   const isActive = formData.get("is_active") === "on";
 
@@ -37,9 +41,11 @@ export async function createService(
 
   const { error } = await supabase.from("services").insert({
     user_id: user.id,
+    staff_id: staffId,
     name,
     description,
-    price,
+    price_transfer: priceTransfer,
+    price_cash: priceCash,
     duration_minutes: durationMinutes,
     is_active: isActive,
   });
@@ -68,7 +74,8 @@ export async function updateService(
 
   const name = ((formData.get("name") as string) || "").trim();
   const description = ((formData.get("description") as string) || "").trim();
-  const price = parseFloat((formData.get("price") as string) || "0") || 0;
+  const priceTransfer = parseFloat((formData.get("price_transfer") as string) || "0") || 0;
+  const priceCash = parseFloat((formData.get("price_cash") as string) || "0") || 0;
   const durationMinutes = parseInt((formData.get("duration_minutes") as string) || "30", 10) || 30;
   const isActive = formData.get("is_active") === "on";
 
@@ -77,7 +84,7 @@ export async function updateService(
 
   const { error } = await supabase
     .from("services")
-    .update({ name, description, price, duration_minutes: durationMinutes, is_active: isActive })
+    .update({ name, description, price_transfer: priceTransfer, price_cash: priceCash, duration_minutes: durationMinutes, is_active: isActive })
     .eq("id", id)
     .eq("user_id", user.id);
 
@@ -210,51 +217,6 @@ export async function deleteStaff(staffId: string): Promise<ActionState> {
   if (error) {
     console.error("deleteStaff error:", error);
     return { error: "Error al eliminar el empleado" };
-  }
-
-  revalidatePath("/admin");
-  return { success: true };
-}
-
-// ---------------------------------------------------------------------------
-// Staff Services
-// ---------------------------------------------------------------------------
-
-export async function updateStaffServices(
-  staffId: string,
-  serviceIds: string[],
-): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
-
-  // Verify staff belongs to user
-  const { data: staff } = await supabase
-    .from("staff")
-    .select("id")
-    .eq("id", staffId)
-    .eq("user_id", user.id)
-    .single();
-
-  if (!staff) return { error: "Empleado no encontrado" };
-
-  // Delete existing assignments
-  await supabase.from("staff_services").delete().eq("staff_id", staffId);
-
-  // Insert new assignments
-  if (serviceIds.length > 0) {
-    const rows = serviceIds.map((serviceId) => ({
-      staff_id: staffId,
-      service_id: serviceId,
-    }));
-
-    const { error } = await supabase.from("staff_services").insert(rows);
-    if (error) {
-      console.error("updateStaffServices error:", error);
-      return { error: "Error al actualizar los servicios del empleado" };
-    }
   }
 
   revalidatePath("/admin");
@@ -450,6 +412,7 @@ export async function saveBookingSettings(
 export async function updateAppointmentStatus(
   appointmentId: string,
   status: AppointmentStatus,
+  paymentMethod?: PaymentMethod,
 ): Promise<ActionState> {
   const supabase = await createClient();
   const {
@@ -460,9 +423,41 @@ export async function updateAppointmentStatus(
   const validStatuses: AppointmentStatus[] = ["confirmed", "completed", "cancelled", "no_show"];
   if (!validStatuses.includes(status)) return { error: "Estado invalido" };
 
+  // Build update payload
+  const updateData: Record<string, unknown> = { status };
+
+  // When completing with a payment method, recalculate price if transfer
+  if (status === "completed" && paymentMethod) {
+    updateData.payment_method = paymentMethod;
+
+    if (paymentMethod === "transfer") {
+      // Get the appointment's service to recalculate with transfer price
+      const { data: apt } = await supabase
+        .from("appointments")
+        .select("service_id, staff_id, discount_percent")
+        .eq("id", appointmentId)
+        .single();
+
+      if (apt) {
+        const { data: svc } = await supabase
+          .from("services")
+          .select("price_transfer, price_cash")
+          .eq("id", apt.service_id)
+          .eq("staff_id", apt.staff_id)
+          .single();
+
+        if (svc) {
+          const discountMult = apt.discount_percent > 0 ? (1 - apt.discount_percent / 100) : 1;
+          updateData.price = Math.round(svc.price_transfer * discountMult * 100) / 100;
+          updateData.original_price = apt.discount_percent > 0 ? svc.price_transfer : null;
+        }
+      }
+    }
+  }
+
   const { error } = await supabase
     .from("appointments")
-    .update({ status })
+    .update(updateData)
     .eq("id", appointmentId)
     .eq("user_id", user.id);
 
@@ -503,15 +498,33 @@ export async function updateAppointmentStatus(
 }
 
 // ---------------------------------------------------------------------------
+// Admin: fetch all services for a staff member (includes inactive)
+// ---------------------------------------------------------------------------
+
+export async function getAllServicesForStaffAction(
+  staffId: string,
+): Promise<import("@/types").Service[]> {
+  const { getAllServicesForStaff } = await import("@/lib/queries/services");
+  return getAllServicesForStaff(staffId);
+}
+
+// ---------------------------------------------------------------------------
 // Public Booking Actions (no auth required)
 // ---------------------------------------------------------------------------
 
-export async function getStaffForServiceAction(
-  serviceId: string,
-): Promise<{ id: string; name: string; avatar_url: string }[]> {
-  const { getStaffForService } = await import("@/lib/queries/staff");
-  const staff = await getStaffForService(serviceId);
-  return staff.map((s) => ({ id: s.id, name: s.name, avatar_url: s.avatar_url }));
+export async function getServicesForStaffAction(
+  staffId: string,
+): Promise<{ id: string; name: string; description: string; duration_minutes: number; price_transfer: number; price_cash: number }[]> {
+  const { getServicesForStaff } = await import("@/lib/queries/services");
+  const services = await getServicesForStaff(staffId);
+  return services.map((s) => ({
+    id: s.id,
+    name: s.name,
+    description: s.description,
+    duration_minutes: s.duration_minutes,
+    price_transfer: s.price_transfer,
+    price_cash: s.price_cash,
+  }));
 }
 
 export async function getAvailableSlotsAction(
@@ -571,24 +584,18 @@ export async function createAppointment(
 
   if (!staffRow) return { error: "Empleado no encontrado" };
 
-  // Get service for duration and price (respect staff override)
+  // Get service for duration and price
   const { data: serviceRow } = await supabase
     .from("services")
-    .select("price, duration_minutes")
+    .select("price_cash, duration_minutes")
     .eq("id", serviceId)
+    .eq("staff_id", staffId)
     .single();
 
   if (!serviceRow) return { error: "Servicio no encontrado" };
 
-  const { data: overrideRow } = await supabase
-    .from("staff_services")
-    .select("price_override, duration_override")
-    .eq("staff_id", staffId)
-    .eq("service_id", serviceId)
-    .maybeSingle();
-
-  const price = overrideRow?.price_override ?? serviceRow.price;
-  const duration = overrideRow?.duration_override ?? serviceRow.duration_minutes;
+  let price = serviceRow.price_cash;
+  const duration = serviceRow.duration_minutes;
 
   // Calculate end_time
   const [hours, minutes] = startTime.split(":").map(Number);
@@ -613,6 +620,35 @@ export async function createAppointment(
     return { error: "Este horario ya no esta disponible. Por favor elegí otro." };
   }
 
+  // Discount code handling
+  const discountCodeRaw = ((formData.get("discount_code") as string) || "").trim();
+  let discountCodeId: string | null = null;
+  let discountPercent = 0;
+  let originalPrice: number | null = null;
+
+  if (discountCodeRaw) {
+    const { data: dcData, error: dcError } = await supabase.rpc(
+      "use_discount_code",
+      { p_code: discountCodeRaw, p_user_id: staffRow.user_id },
+    );
+
+    if (dcError) {
+      const msg = dcError.message.includes("INVALID_CODE")
+        ? "Cupon invalido"
+        : dcError.message.includes("CODE_EXHAUSTED")
+          ? "Este cupon ya alcanzo su limite de usos"
+          : "Error al aplicar el cupon";
+      return { error: msg };
+    }
+
+    if (dcData && dcData.length > 0) {
+      discountCodeId = dcData[0].discount_code_id;
+      discountPercent = dcData[0].discount_percent;
+      originalPrice = price;
+      price = Math.round(price * (1 - discountPercent / 100) * 100) / 100;
+    }
+  }
+
   const { data: appointment, error } = await supabase
     .from("appointments")
     .insert({
@@ -626,6 +662,9 @@ export async function createAppointment(
       start_time: startTime,
       end_time: endTime,
       price,
+      original_price: originalPrice,
+      discount_code_id: discountCodeId,
+      discount_percent: discountPercent,
       status: "confirmed",
     })
     .select("id")
@@ -695,4 +734,161 @@ export async function getAllClientsAction(): Promise<import("@/types").Client[]>
     .order("total_appointments", { ascending: false });
 
   return (data as import("@/types").Client[]) ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// Discount Codes
+// ---------------------------------------------------------------------------
+
+export async function createDiscountCode(
+  _prev: ActionState | null,
+  formData: FormData,
+): Promise<ActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  const code = ((formData.get("code") as string) || "").trim().toUpperCase();
+  const discountPercent =
+    parseInt((formData.get("discount_percent") as string) || "0", 10);
+  const maxUses =
+    parseInt((formData.get("max_uses") as string) || "1", 10);
+  const isActive = formData.get("is_active") === "on";
+
+  if (!code) return { error: "El codigo es obligatorio" };
+  if (discountPercent < 1 || discountPercent > 100)
+    return { error: "El porcentaje debe ser entre 1 y 100" };
+  if (maxUses < 1) return { error: "La cantidad minima es 1" };
+
+  const { error } = await supabase.from("discount_codes").insert({
+    user_id: user.id,
+    code,
+    discount_percent: discountPercent,
+    max_uses: maxUses,
+    is_active: isActive,
+  });
+
+  if (error) {
+    if (error.code === "23505")
+      return { error: "Ya existe un cupon con ese codigo" };
+    console.error("createDiscountCode error:", error);
+    return { error: "Error al crear el cupon" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function updateDiscountCode(
+  _prev: ActionState | null,
+  formData: FormData,
+): Promise<ActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  const id = formData.get("id") as string;
+  if (!id) return { error: "ID de cupon faltante" };
+
+  const code = ((formData.get("code") as string) || "").trim().toUpperCase();
+  const discountPercent =
+    parseInt((formData.get("discount_percent") as string) || "0", 10);
+  const maxUses =
+    parseInt((formData.get("max_uses") as string) || "1", 10);
+  const isActive = formData.get("is_active") === "on";
+
+  if (!code) return { error: "El codigo es obligatorio" };
+  if (discountPercent < 1 || discountPercent > 100)
+    return { error: "El porcentaje debe ser entre 1 y 100" };
+  if (maxUses < 1) return { error: "La cantidad minima es 1" };
+
+  const { error } = await supabase
+    .from("discount_codes")
+    .update({
+      code,
+      discount_percent: discountPercent,
+      max_uses: maxUses,
+      is_active: isActive,
+    })
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    if (error.code === "23505")
+      return { error: "Ya existe un cupon con ese codigo" };
+    console.error("updateDiscountCode error:", error);
+    return { error: "Error al actualizar el cupon" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function deleteDiscountCode(
+  discountCodeId: string,
+): Promise<ActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  const { error } = await supabase
+    .from("discount_codes")
+    .delete()
+    .eq("id", discountCodeId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("deleteDiscountCode error:", error);
+    return { error: "Error al eliminar el cupon" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function validateDiscountCodeAction(
+  code: string,
+  userId: string,
+): Promise<{
+  valid: boolean;
+  discount_code_id?: string;
+  discount_percent?: number;
+  error?: string;
+}> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("discount_codes")
+    .select("id, discount_percent")
+    .eq("user_id", userId)
+    .ilike("code", code)
+    .eq("is_active", true)
+    .limit(1)
+    .single();
+
+  if (!data) {
+    return { valid: false, error: "Cupon invalido o agotado" };
+  }
+
+  // Check usage separately to give better error message
+  const { data: full } = await supabase
+    .from("discount_codes")
+    .select("used_count, max_uses")
+    .eq("id", data.id)
+    .single();
+
+  if (full && full.used_count >= full.max_uses) {
+    return { valid: false, error: "Este cupon ya alcanzo su limite de usos" };
+  }
+
+  return {
+    valid: true,
+    discount_code_id: data.id,
+    discount_percent: data.discount_percent,
+  };
 }

@@ -4,13 +4,14 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Button, Input, Heading, Text } from "@/components/ui";
 import {
-  getStaffForServiceAction,
+  getServicesForStaffAction,
   getAvailableSlotsAction,
   getStaffScheduleAction,
   getStaffTimeOffDatesAction,
   createAppointment,
+  validateDiscountCodeAction,
 } from "@/app/admin/turnero-actions";
-import type { BookingSettings, Service, StaffMember } from "@/types";
+import type { BookingSettings, StaffMember } from "@/types";
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, format, addMonths, isSameMonth,
@@ -18,28 +19,36 @@ import {
 } from "date-fns";
 import { es } from "date-fns/locale";
 
-type BookingStep = "service" | "staff" | "date" | "time" | "contact" | "confirm" | "success";
+type BookingStep = "staff" | "service" | "date" | "time" | "contact" | "confirm" | "success";
 
-const STEP_LABELS = ["Servicio", "Profesional", "Fecha", "Hora", "Datos", "Confirmar"];
+const STEP_LABELS = ["Profesional", "Servicio", "Fecha", "Hora", "Datos", "Confirmar"];
+
+interface StaffService {
+  id: string;
+  name: string;
+  description: string;
+  duration_minutes: number;
+  price_transfer: number;
+  price_cash: number;
+}
 
 interface BookingWidgetProps {
   settings: BookingSettings;
-  services: Service[];
   staff: StaffMember[];
   userId: string;
 }
 
-export function BookingWidget({ settings, services, staff: initialStaff }: BookingWidgetProps) {
-  const [step, setStep] = React.useState<BookingStep>("service");
-  const [selectedService, setSelectedService] = React.useState<Service | null>(null);
-  const [selectedStaff, setSelectedStaff] = React.useState<{ id: string; name: string; avatar_url: string } | null>(null);
+export function BookingWidget({ settings, staff: initialStaff, userId }: BookingWidgetProps) {
+  const [step, setStep] = React.useState<BookingStep>("staff");
+  const [selectedStaff, setSelectedStaff] = React.useState<StaffMember | null>(null);
+  const [staffServices, setStaffServices] = React.useState<StaffService[]>([]);
+  const [selectedService, setSelectedService] = React.useState<StaffService | null>(null);
   const [selectedDate, setSelectedDate] = React.useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = React.useState<string | null>(null);
   const [contactName, setContactName] = React.useState("");
   const [contactPhone, setContactPhone] = React.useState("");
   const [contactEmail, setContactEmail] = React.useState("");
 
-  const [availableStaff, setAvailableStaff] = React.useState<{ id: string; name: string; avatar_url: string }[]>([]);
   const [availableSlots, setAvailableSlots] = React.useState<string[]>([]);
   const [staffSchedule, setStaffSchedule] = React.useState<{ day_of_week: number; is_working: boolean }[]>([]);
   const [staffTimeOffDates, setStaffTimeOffDates] = React.useState<string[]>([]);
@@ -47,39 +56,59 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState("");
 
-  const stepIndex = ["service", "staff", "date", "time", "contact", "confirm"].indexOf(step);
+  // Discount code
+  const [discountCode, setDiscountCode] = React.useState("");
+  const [appliedDiscount, setAppliedDiscount] = React.useState<{
+    discount_code_id: string;
+    discount_percent: number;
+  } | null>(null);
+  const [discountError, setDiscountError] = React.useState("");
+  const [validatingDiscount, setValidatingDiscount] = React.useState(false);
+
+  const stepIndex = ["staff", "service", "date", "time", "contact", "confirm"].indexOf(step);
+
+  // Auto-select if only 1 staff member
+  const autoSelected = React.useRef(false);
+  React.useEffect(() => {
+    if (initialStaff.length === 1 && !autoSelected.current) {
+      autoSelected.current = true;
+      handleSelectStaff(initialStaff[0]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- Step handlers ---
 
-  async function handleSelectService(service: Service) {
-    setSelectedService(service);
-    setSelectedStaff(null);
-    setSelectedDate(null);
-    setSelectedTime(null);
-    setLoading(true);
-    const staffList = await getStaffForServiceAction(service.id);
-    setAvailableStaff(staffList);
-    setLoading(false);
-
-    if (staffList.length === 1) {
-      await handleSelectStaff(staffList[0]);
-    } else {
-      setStep("staff");
-    }
-  }
-
-  async function handleSelectStaff(member: { id: string; name: string; avatar_url: string }) {
+  async function handleSelectStaff(member: StaffMember) {
     setSelectedStaff(member);
+    setSelectedService(null);
     setSelectedDate(null);
     setSelectedTime(null);
     setLoading(true);
-    const [schedule, timeOffDates] = await Promise.all([
+
+    const [services, schedule, timeOffDates] = await Promise.all([
+      getServicesForStaffAction(member.id),
       getStaffScheduleAction(member.id),
       getStaffTimeOffDatesAction(member.id),
     ]);
+
+    setStaffServices(services);
     setStaffSchedule(schedule);
     setStaffTimeOffDates(timeOffDates);
     setLoading(false);
+
+    if (initialStaff.length === 1 && services.length === 1) {
+      setSelectedService(services[0]);
+      setStep("date");
+    } else {
+      setStep("service");
+    }
+  }
+
+  function handleSelectService(service: StaffService) {
+    setSelectedService(service);
+    setSelectedDate(null);
+    setSelectedTime(null);
     setStep("date");
   }
 
@@ -105,6 +134,30 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
     setStep("confirm");
   }
 
+  async function handleApplyDiscount() {
+    if (!discountCode.trim()) return;
+    setValidatingDiscount(true);
+    setDiscountError("");
+    const result = await validateDiscountCodeAction(discountCode.trim(), userId);
+    setValidatingDiscount(false);
+    if (result.valid) {
+      setAppliedDiscount({
+        discount_code_id: result.discount_code_id!,
+        discount_percent: result.discount_percent!,
+      });
+      setDiscountError("");
+    } else {
+      setAppliedDiscount(null);
+      setDiscountError(result.error || "Cupon invalido");
+    }
+  }
+
+  function handleRemoveDiscount() {
+    setAppliedDiscount(null);
+    setDiscountCode("");
+    setDiscountError("");
+  }
+
   async function handleConfirm() {
     if (!selectedService || !selectedStaff || !selectedDate || !selectedTime) return;
     setSubmitting(true);
@@ -117,6 +170,7 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
     fd.set("client_name", contactName);
     fd.set("client_phone", contactPhone);
     fd.set("client_email", contactEmail);
+    if (appliedDiscount) fd.set("discount_code", discountCode.trim());
     const result = await createAppointment(fd);
     setSubmitting(false);
     if (result.success) {
@@ -127,12 +181,14 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
   }
 
   function handleBack() {
-    const steps: BookingStep[] = ["service", "staff", "date", "time", "contact", "confirm"];
+    const steps: BookingStep[] = ["staff", "service", "date", "time", "contact", "confirm"];
     const currentIndex = steps.indexOf(step);
     if (currentIndex > 0) {
-      // If we auto-skipped staff (only 1), go back to service
-      if (step === "date" && availableStaff.length === 1) {
-        setStep("service");
+      // If we auto-skipped staff+service (only 1 of each), go back to staff
+      if (step === "date" && initialStaff.length === 1 && staffServices.length === 1) {
+        setStep("staff");
+      } else if (step === "service" && initialStaff.length === 1) {
+        setStep("staff");
       } else {
         setStep(steps[currentIndex - 1]);
       }
@@ -140,15 +196,24 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
   }
 
   function handleReset() {
-    setStep("service");
-    setSelectedService(null);
+    setStep("staff");
     setSelectedStaff(null);
+    setStaffServices([]);
+    setSelectedService(null);
     setSelectedDate(null);
     setSelectedTime(null);
     setContactName("");
     setContactPhone("");
     setContactEmail("");
     setError("");
+    setDiscountCode("");
+    setAppliedDiscount(null);
+    setDiscountError("");
+
+    // Auto-select if only 1 staff
+    if (initialStaff.length === 1) {
+      handleSelectStaff(initialStaff[0]);
+    }
   }
 
   if (step === "success") {
@@ -241,7 +306,7 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
         </div>
 
         {/* Back button */}
-        {step !== "service" && (
+        {step !== "staff" && (
           <button
             onClick={handleBack}
             className="flex items-center gap-1.5 self-start text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -256,11 +321,11 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
 
         {/* Step content */}
         <div className="w-full">
-          {step === "service" && (
-            <ServiceStep services={services} onSelect={handleSelectService} loading={loading} />
-          )}
           {step === "staff" && (
-            <StaffStep staff={availableStaff} onSelect={handleSelectStaff} loading={loading} />
+            <StaffStep staff={initialStaff} onSelect={handleSelectStaff} loading={loading} />
+          )}
+          {step === "service" && (
+            <ServiceStep services={staffServices} onSelect={handleSelectService} loading={loading} />
           )}
           {step === "date" && (
             <DateStep
@@ -287,9 +352,9 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
               onSubmit={handleContactSubmit}
             />
           )}
-          {step === "confirm" && (
+          {step === "confirm" && selectedService && (
             <ConfirmStep
-              service={selectedService!}
+              service={selectedService}
               staffName={selectedStaff!.name}
               date={selectedDate!}
               time={selectedTime!}
@@ -299,6 +364,13 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
               onConfirm={handleConfirm}
               submitting={submitting}
               error={error}
+              discountCode={discountCode}
+              discountError={discountError}
+              appliedDiscount={appliedDiscount}
+              validatingDiscount={validatingDiscount}
+              onDiscountCodeChange={setDiscountCode}
+              onApplyDiscount={handleApplyDiscount}
+              onRemoveDiscount={handleRemoveDiscount}
             />
           )}
         </div>
@@ -312,10 +384,18 @@ export function BookingWidget({ settings, services, staff: initialStaff }: Booki
 // ---------------------------------------------------------------------------
 
 function ServiceStep({ services, onSelect, loading }: {
-  services: Service[];
-  onSelect: (s: Service) => void;
+  services: StaffService[];
+  onSelect: (s: StaffService) => void;
   loading: boolean;
 }) {
+  if (loading) {
+    return <Text variant="muted" className="text-center">Cargando servicios...</Text>;
+  }
+
+  if (services.length === 0) {
+    return <Text variant="muted" className="text-center">Este profesional no tiene servicios asignados.</Text>;
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <Text size="sm" variant="muted" className="text-center">Selecciona un servicio</Text>
@@ -329,9 +409,18 @@ function ServiceStep({ services, onSelect, loading }: {
           >
             <Text className="font-semibold">{service.name}</Text>
             {service.description && <Text size="sm" variant="muted">{service.description}</Text>}
-            <div className="mt-1 flex items-center gap-2">
-              <Text size="sm" className="font-semibold">${service.price.toLocaleString("es-AR")}</Text>
-              <Text size="sm" variant="muted">· {service.duration_minutes} min</Text>
+            <div className="mt-1 flex flex-col gap-0.5">
+              <div className="flex items-center gap-2">
+                <Text size="sm" className="font-semibold">${service.price_cash.toLocaleString("es-AR")}</Text>
+                <Text size="sm" variant="muted">efectivo</Text>
+              </div>
+              {service.price_transfer !== service.price_cash && (
+                <div className="flex items-center gap-2">
+                  <Text size="sm" className="font-semibold">${service.price_transfer.toLocaleString("es-AR")}</Text>
+                  <Text size="sm" variant="muted">transferencia</Text>
+                </div>
+              )}
+              <Text size="sm" variant="muted">{service.duration_minutes} min</Text>
             </div>
           </button>
         ))}
@@ -345,8 +434,8 @@ function ServiceStep({ services, onSelect, loading }: {
 // ---------------------------------------------------------------------------
 
 function StaffStep({ staff, onSelect, loading }: {
-  staff: { id: string; name: string; avatar_url: string }[];
-  onSelect: (s: { id: string; name: string; avatar_url: string }) => void;
+  staff: StaffMember[];
+  onSelect: (s: StaffMember) => void;
   loading: boolean;
 }) {
   if (loading) {
@@ -354,7 +443,7 @@ function StaffStep({ staff, onSelect, loading }: {
   }
 
   if (staff.length === 0) {
-    return <Text variant="muted" className="text-center">No hay profesionales disponibles para este servicio.</Text>;
+    return <Text variant="muted" className="text-center">No hay profesionales disponibles.</Text>;
   }
 
   return (
@@ -580,8 +669,10 @@ function ContactStep({
 function ConfirmStep({
   service, staffName, date, time, name, phone, email,
   onConfirm, submitting, error,
+  discountCode, discountError, appliedDiscount, validatingDiscount,
+  onDiscountCodeChange, onApplyDiscount, onRemoveDiscount,
 }: {
-  service: Service;
+  service: StaffService;
   staffName: string;
   date: Date;
   time: string;
@@ -591,7 +682,17 @@ function ConfirmStep({
   onConfirm: () => void;
   submitting: boolean;
   error: string;
+  discountCode: string;
+  discountError: string;
+  appliedDiscount: { discount_code_id: string; discount_percent: number } | null;
+  validatingDiscount: boolean;
+  onDiscountCodeChange: (v: string) => void;
+  onApplyDiscount: () => void;
+  onRemoveDiscount: () => void;
 }) {
+  const discountMult = appliedDiscount ? (1 - appliedDiscount.discount_percent / 100) : 1;
+  const applyDisc = (p: number) => Math.round(p * discountMult * 100) / 100;
+
   return (
     <div className="flex flex-col gap-4">
       <Text size="sm" variant="muted" className="text-center">Confirma tu turno</Text>
@@ -620,10 +721,79 @@ function ConfirmStep({
             <Text size="sm" className="font-medium">{service.duration_minutes} min</Text>
           </div>
           <div className="my-1 h-px bg-border" />
-          <div className="flex justify-between">
-            <Text size="sm" variant="muted">Precio</Text>
-            <Text className="font-semibold">${service.price.toLocaleString("es-AR")}</Text>
+
+          {/* Discount code */}
+          <div className="flex flex-col gap-2">
+            <Text size="sm" variant="muted">Cupon de descuento</Text>
+            {appliedDiscount ? (
+              <div className="flex items-center justify-between rounded-xl bg-green-50 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-green-600">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  <Text size="sm" className="font-medium text-green-700">
+                    {discountCode.toUpperCase()} (-{appliedDiscount.discount_percent}%)
+                  </Text>
+                </div>
+                <button
+                  type="button"
+                  onClick={onRemoveDiscount}
+                  className="text-sm font-medium text-red-500 hover:text-red-700"
+                >
+                  Quitar
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Ingresa tu codigo"
+                  value={discountCode}
+                  onChange={(e) => onDiscountCodeChange(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onApplyDiscount}
+                  disabled={validatingDiscount || !discountCode.trim()}
+                >
+                  {validatingDiscount ? "..." : "Aplicar"}
+                </Button>
+              </div>
+            )}
+            {discountError && (
+              <Text size="sm" className="text-red-500">{discountError}</Text>
+            )}
           </div>
+
+          <div className="my-1 h-px bg-border" />
+
+          {/* Prices */}
+          <div className="flex justify-between">
+            <Text size="sm" variant="muted">Efectivo</Text>
+            <div className="flex items-center gap-2">
+              {appliedDiscount && (
+                <Text size="sm" variant="muted" className="line-through">
+                  ${service.price_cash.toLocaleString("es-AR")}
+                </Text>
+              )}
+              <Text className="font-semibold">${applyDisc(service.price_cash).toLocaleString("es-AR")}</Text>
+            </div>
+          </div>
+          {service.price_transfer !== service.price_cash && (
+            <div className="flex justify-between">
+              <Text size="sm" variant="muted">Transferencia</Text>
+              <div className="flex items-center gap-2">
+                {appliedDiscount && (
+                  <Text size="sm" variant="muted" className="line-through">
+                    ${service.price_transfer.toLocaleString("es-AR")}
+                  </Text>
+                )}
+                <Text className="font-semibold">${applyDisc(service.price_transfer).toLocaleString("es-AR")}</Text>
+              </div>
+            </div>
+          )}
+
           <div className="my-1 h-px bg-border" />
           <div className="flex justify-between">
             <Text size="sm" variant="muted">Nombre</Text>

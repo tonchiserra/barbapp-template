@@ -2,33 +2,31 @@
 
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { format as fnsFormat, subMonths } from "date-fns";
+import { format as fnsFormat, subMonths, addDays } from "date-fns";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import {
   Heading, Text, Button, Badge,
   Card, CardHeader, CardTitle, CardContent,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   useToast,
 } from "@/components/ui";
 import { updateAppointmentStatus } from "../turnero-actions";
-import type { AppointmentWithDetails, AppointmentStatus } from "@/types";
+import type { Appointment, AppointmentWithDetails, AppointmentStatus, PaymentMethod, StaffMember } from "@/types";
 
 interface BookingDashboardProps {
-  todayAppointments: AppointmentWithDetails[];
-  nextAppointment: AppointmentWithDetails | null;
-  weekCount: number;
-  monthCount: number;
-  monthRevenue: number;
-  weekRevenue: number;
-  prevWeekRevenue: number;
-  prevMonthRevenue: number;
+  upcomingAppointments: AppointmentWithDetails[];
+  weekAppointments: Appointment[];
+  monthAppointments: Appointment[];
+  prevWeekAppointments: Appointment[];
+  prevMonthAppointments: Appointment[];
+  historicalAppointments: Appointment[] | null;
+  staff: StaffMember[];
+  todayStr: string;
   historicalMonth: string | null;
   historicalLabel: string | null;
-  historicalRevenue: number | null;
-  historicalCount: number | null;
-  historicalCompletedCount: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,56 +147,117 @@ function AppointmentRow({ appointment }: { appointment: AppointmentWithDetails }
   const { toast } = useToast();
   const [loading, setLoading] = React.useState(false);
   const [currentStatus, setCurrentStatus] = React.useState<AppointmentStatus>(appointment.status);
+  const [currentPrice, setCurrentPrice] = React.useState(Number(appointment.price));
+  const [currentPaymentMethod, setCurrentPaymentMethod] = React.useState<PaymentMethod | null>(appointment.payment_method);
+  const [completeDialogOpen, setCompleteDialogOpen] = React.useState(false);
   const timeStr = appointment.start_time.slice(0, 5);
 
-  const handleStatusChange = async (newStatus: AppointmentStatus) => {
+  const discountMult = appointment.discount_percent > 0 ? (1 - appointment.discount_percent / 100) : 1;
+  const cashPrice = Math.round(Number(appointment.service_price_transfer) * discountMult * 100) / 100 !== Number(appointment.price)
+    ? Number(appointment.price)
+    : Number(appointment.price);
+  const transferPrice = Math.round(Number(appointment.service_price_transfer) * discountMult * 100) / 100;
+  const pricesDiffer = transferPrice !== cashPrice;
+
+  const handleStatusChange = async (newStatus: AppointmentStatus, paymentMethod?: PaymentMethod) => {
     setLoading(true);
-    const result = await updateAppointmentStatus(appointment.id, newStatus);
+    const result = await updateAppointmentStatus(appointment.id, newStatus, paymentMethod);
     setLoading(false);
 
     if (result.error) {
       toast(result.error, "error");
     } else {
       setCurrentStatus(newStatus);
+      if (paymentMethod) {
+        setCurrentPaymentMethod(paymentMethod);
+        setCurrentPrice(paymentMethod === "transfer" ? transferPrice : cashPrice);
+      }
       toast(`Turno ${STATUS_LABELS[newStatus].toLowerCase()}`, "success");
     }
   };
 
+  const handleComplete = (paymentMethod: PaymentMethod) => {
+    setCompleteDialogOpen(false);
+    handleStatusChange("completed", paymentMethod);
+  };
+
   return (
     <div className={cn(
-      "flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:gap-4",
+      "space-y-3 rounded-xl border p-4",
       currentStatus === "cancelled" && "opacity-50",
     )}>
-      {/* Time + client */}
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-sm font-semibold">
+      {/* Row 1: time + client + price */}
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-max px-2 shrink-0 items-center justify-center rounded-xl bg-accent text-sm font-semibold">
           {timeStr}
         </div>
-        <div className="min-w-0 flex-1">
-          <Text className="truncate font-medium">{appointment.client_name}</Text>
-          <Text size="sm" variant="muted" className="truncate">
-            {appointment.service_name} &middot; {appointment.staff_name}
-          </Text>
+        <Text className="min-w-0 flex-1 truncate font-medium">{appointment.client_name}</Text>
+        <div className="flex shrink-0 flex-col items-end gap-0.5">
+          {appointment.discount_percent > 0 && (
+            <Badge variant="secondary">-{appointment.discount_percent}%</Badge>
+          )}
+          {currentStatus === "completed" && currentPaymentMethod ? (
+            <div className="flex items-center gap-1.5">
+              <Text size="sm" className="font-semibold">{formatARS(currentPrice)}</Text>
+              <Text size="sm" variant="muted">{currentPaymentMethod === "transfer" ? "transf." : "efec."}</Text>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5">
+                <Text size="sm" className="font-semibold">{formatARS(cashPrice)}</Text>
+                <Text size="sm" variant="muted">efec.</Text>
+              </div>
+              {pricesDiffer && (
+                <div className="flex items-center gap-1.5">
+                  <Text size="sm" className="font-semibold">{formatARS(transferPrice)}</Text>
+                  <Text size="sm" variant="muted">transf.</Text>
+                </div>
+              )}
+            </>
+          )}
         </div>
-        <Badge variant={STATUS_VARIANTS[currentStatus]}>
-          {STATUS_LABELS[currentStatus]}
-        </Badge>
       </div>
 
-      {/* Actions */}
-      {currentStatus === "confirmed" && (
-        <div className="flex gap-2 sm:shrink-0">
-          <Button size="sm" onClick={() => handleStatusChange("completed")} disabled={loading}>
-            Completar
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => handleStatusChange("cancelled")} disabled={loading}>
-            Cancelar
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => handleStatusChange("no_show")} disabled={loading}>
-            No asistio
-          </Button>
-        </div>
-      )}
+      {/* Row 2: service · staff + status + actions */}
+      <div className="flex items-center gap-2">
+        <Text size="sm" variant="muted" className="min-w-0 flex-1 truncate">
+          {appointment.service_name} &middot; {appointment.staff_name}
+        </Text>
+        <Badge variant="secondary">
+          {STATUS_LABELS[currentStatus]}
+        </Badge>
+        {currentStatus === "confirmed" && (
+          <>
+            <Button size="sm" onClick={() => setCompleteDialogOpen(true)} disabled={loading}>
+              Completar
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleStatusChange("cancelled")} disabled={loading}>
+              Cancelar
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => handleStatusChange("no_show")} disabled={loading}>
+              No asistio
+            </Button>
+          </>
+        )}
+      </div>
+
+      {/* Complete dialog: ask payment method */}
+      <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Metodo de pago</DialogTitle>
+            <DialogDescription>¿Como pago {appointment.client_name}?</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <Button onClick={() => handleComplete("cash")} disabled={loading}>
+              Efectivo — {formatARS(cashPrice)}
+            </Button>
+            <Button variant="outline" onClick={() => handleComplete("transfer")} disabled={loading}>
+              Transferencia — {formatARS(transferPrice)}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -208,23 +267,89 @@ function AppointmentRow({ appointment }: { appointment: AppointmentWithDetails }
 // ---------------------------------------------------------------------------
 
 export function BookingDashboard({
-  todayAppointments,
-  nextAppointment,
-  weekCount,
-  monthCount,
-  monthRevenue,
-  weekRevenue,
-  prevWeekRevenue,
-  prevMonthRevenue,
+  upcomingAppointments,
+  weekAppointments,
+  monthAppointments,
+  prevWeekAppointments,
+  prevMonthAppointments,
+  historicalAppointments,
+  staff,
+  todayStr,
   historicalMonth,
   historicalLabel,
-  historicalRevenue,
-  historicalCount,
-  historicalCompletedCount,
 }: BookingDashboardProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const todayCount = todayAppointments.length;
+
+  const [selectedDay, setSelectedDay] = React.useState(todayStr);
+  const [selectedStaffId, setSelectedStaffId] = React.useState("all");
+
+  // Staff filter helper
+  const byStaff = React.useCallback(
+    <T extends { staff_id: string }>(arr: T[]) =>
+      selectedStaffId === "all" ? arr : arr.filter((a) => a.staff_id === selectedStaffId),
+    [selectedStaffId],
+  );
+
+  const activeStatuses = ["confirmed", "completed"];
+
+  // Build 7-day tabs
+  const days = React.useMemo(() => {
+    const today = new Date(todayStr + "T00:00:00");
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = addDays(today, i);
+      const dateStr = fnsFormat(date, "yyyy-MM-dd");
+      return {
+        dateStr,
+        label: i === 0 ? "Hoy" : fnsFormat(date, "EEE d", { locale: es }),
+        isToday: i === 0,
+      };
+    });
+  }, [todayStr]);
+
+  // Filter agenda appointments by staff
+  const filteredByStaff = byStaff(upcomingAppointments);
+  const dayAppointments = filteredByStaff.filter((a) => a.date === selectedDay);
+
+  // Next appointment (respects staff filter)
+  const filteredNextAppointment = React.useMemo(() => {
+    const now = new Date();
+    const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:00`;
+    return filteredByStaff.find((a) =>
+      a.status === "confirmed" && (a.date > todayStr || (a.date === todayStr && a.start_time >= nowTime)),
+    ) ?? null;
+  }, [filteredByStaff, todayStr]);
+
+  // Metrics (all filtered by staff)
+  const todayCount = byStaff(upcomingAppointments).filter((a) => a.date === todayStr).length;
+
+  const weekFiltered = byStaff(weekAppointments);
+  const weekCount = weekFiltered.filter((a) => activeStatuses.includes(a.status)).length;
+  const weekRevenue = weekFiltered.filter((a) => a.status === "completed").reduce((sum, a) => sum + Number(a.price), 0);
+
+  const monthFiltered = byStaff(monthAppointments);
+  const monthCount = monthFiltered.filter((a) => activeStatuses.includes(a.status)).length;
+  const monthRevenue = monthFiltered.filter((a) => a.status === "completed").reduce((sum, a) => sum + Number(a.price), 0);
+
+  const prevWeekRevenue = byStaff(prevWeekAppointments)
+    .filter((a) => a.status === "completed")
+    .reduce((sum, a) => sum + Number(a.price), 0);
+  const prevMonthRevenue = byStaff(prevMonthAppointments)
+    .filter((a) => a.status === "completed")
+    .reduce((sum, a) => sum + Number(a.price), 0);
+
+  // Historical metrics (filtered by staff)
+  const historicalMetrics = React.useMemo(() => {
+    if (!historicalAppointments) return null;
+    const filtered = byStaff(historicalAppointments);
+    const active = filtered.filter((a) => activeStatuses.includes(a.status));
+    const completed = filtered.filter((a) => a.status === "completed");
+    return {
+      count: active.length,
+      completedCount: completed.length,
+      revenue: completed.reduce((sum, a) => sum + Number(a.price), 0),
+    };
+  }, [historicalAppointments, byStaff]);
 
   const monthOptions = React.useMemo(() => {
     const now = new Date();
@@ -243,6 +368,26 @@ export function BookingDashboard({
 
   return (
     <div className="space-y-8">
+      {/* Staff filter */}
+      {staff.length > 1 && (
+        <div className="flex items-center gap-3">
+          <Text size="sm" variant="muted">Filtrar por:</Text>
+          <div className="w-44">
+            <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {staff.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
       {/* Metrics */}
       <div>
         <Heading as="h2" className="mb-4 text-lg">Metricas</Heading>
@@ -265,21 +410,41 @@ export function BookingDashboard({
         </div>
       </div>
 
-      {/* Next appointment */}
-      <NextAppointmentCard appointment={nextAppointment} />
-
-      {/* Today's agenda */}
+      {/* 7-day agenda */}
       <div>
-        <Heading as="h2" className="mb-4 text-lg">Agenda de hoy</Heading>
-        {todayAppointments.length === 0 ? (
+        <Heading as="h2" className="mb-4 text-lg">Agenda</Heading>
+
+        {/* Next appointment */}
+        <NextAppointmentCard appointment={filteredNextAppointment} />
+
+        {/* Day tabs */}
+        <div className="mt-4 mb-4 grid gap-1.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(40px, 1fr))" }}>
+          {days.map((day) => (
+            <button
+              key={day.dateStr}
+              onClick={() => setSelectedDay(day.dateStr)}
+              className={cn(
+                "flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+                selectedDay === day.dateStr
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-accent text-muted-foreground hover:bg-accent/80",
+              )}
+            >
+              <span className="capitalize">{day.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Appointment list */}
+        {dayAppointments.length === 0 ? (
           <Card>
             <CardContent className="p-6 text-center">
-              <Text variant="muted">No hay turnos para hoy</Text>
+              <Text variant="muted">No hay turnos para este dia</Text>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-3">
-            {todayAppointments.map((appt) => (
+            {dayAppointments.map((appt) => (
               <AppointmentRow key={appt.id} appointment={appt} />
             ))}
           </div>
@@ -306,11 +471,11 @@ export function BookingDashboard({
           </div>
         </div>
 
-        {historicalMonth && historicalRevenue != null ? (
+        {historicalMonth && historicalMetrics ? (
           <div className="grid grid-cols-3 gap-3">
-            <MetricCard label="Turnos" value={historicalCount ?? 0} />
-            <MetricCard label="Completados" value={historicalCompletedCount ?? 0} />
-            <MetricCard label="Ingresos" value={formatARS(historicalRevenue)} />
+            <MetricCard label="Turnos" value={historicalMetrics.count} />
+            <MetricCard label="Completados" value={historicalMetrics.completedCount} />
+            <MetricCard label="Ingresos" value={formatARS(historicalMetrics.revenue)} />
           </div>
         ) : (
           <Card>

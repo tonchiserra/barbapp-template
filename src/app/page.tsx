@@ -26,8 +26,8 @@ export default async function Home() {
     <>
       <style dangerouslySetInnerHTML={{ __html: themeCss }} />
       <Header settings={headerSettings} />
-      <Carousel settings={carouselSettings} />
       <Booking />
+      <Carousel settings={carouselSettings} />
       <Video settings={videoSettings} />
       <Gallery settings={gallerySettings} />
       <Multicolumn settings={multicolumnSettings} />

@@ -2,30 +2,30 @@
 
 import * as React from "react";
 import {
-  Button, Input, Switch, Badge, Checkbox,
+  Button, Input, Textarea, Switch, Badge,
   Card, CardHeader, CardContent,
   Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
   Heading, Text, useToast,
 } from "@/components/ui";
 import {
   createStaff, updateStaff, deleteStaff,
-  updateStaffServices, updateStaffSchedule,
+  createService, updateService, deleteService,
+  getAllServicesForStaffAction,
+  updateStaffSchedule,
   addStaffTimeOff, removeStaffTimeOff,
   addStaffBlockedTime, removeStaffBlockedTime,
 } from "@/app/admin/turnero-actions";
-import type { StaffMember, Service, StaffService, StaffSchedule, StaffTimeOff, StaffBlockedTime } from "@/types";
+import type { StaffMember, Service, StaffSchedule, StaffTimeOff, StaffBlockedTime } from "@/types";
 import { DAY_NAMES } from "@/types";
 
 interface StaffSettingsProps {
   staff: StaffMember[];
-  services: Service[];
-  staffServices: StaffService[];
   staffSchedules: StaffSchedule[];
   staffTimeOff: StaffTimeOff[];
   staffBlockedTimes: StaffBlockedTime[];
 }
 
-export function StaffSettings({ staff, services, staffServices, staffSchedules, staffTimeOff, staffBlockedTimes }: StaffSettingsProps) {
+export function StaffSettings({ staff, staffSchedules, staffTimeOff, staffBlockedTimes }: StaffSettingsProps) {
   const [selectedStaffId, setSelectedStaffId] = React.useState<string | null>(null);
 
   const selectedStaff = staff.find((s) => s.id === selectedStaffId);
@@ -34,8 +34,6 @@ export function StaffSettings({ staff, services, staffServices, staffSchedules, 
     return (
       <StaffDetail
         staff={selectedStaff}
-        services={services}
-        staffServices={staffServices.filter((ss) => ss.staff_id === selectedStaff.id)}
         schedules={staffSchedules.filter((s) => s.staff_id === selectedStaff.id)}
         timeOff={staffTimeOff.filter((t) => t.staff_id === selectedStaff.id)}
         blockedTimes={staffBlockedTimes.filter((bt) => bt.staff_id === selectedStaff.id)}
@@ -156,16 +154,12 @@ function StaffCreateForm({ onSubmit, pending }: { onSubmit: (fd: FormData) => vo
 
 function StaffDetail({
   staff,
-  services,
-  staffServices,
   schedules,
   timeOff,
   blockedTimes,
   onBack,
 }: {
   staff: StaffMember;
-  services: Service[];
-  staffServices: StaffService[];
   schedules: StaffSchedule[];
   timeOff: StaffTimeOff[];
   blockedTimes: StaffBlockedTime[];
@@ -204,27 +198,6 @@ function StaffDetail({
     } else {
       toast(result.error || "Error", "error");
     }
-  }
-
-  // --- Services assignment ---
-  const assignedIds = new Set(staffServices.map((ss) => ss.service_id));
-  const [selectedServiceIds, setSelectedServiceIds] = React.useState<Set<string>>(assignedIds);
-
-  function toggleService(serviceId: string) {
-    setSelectedServiceIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(serviceId)) next.delete(serviceId);
-      else next.add(serviceId);
-      return next;
-    });
-  }
-
-  async function handleSaveServices() {
-    setPending(true);
-    const result = await updateStaffServices(staff.id, Array.from(selectedServiceIds));
-    setPending(false);
-    if (result.success) toast("Servicios actualizados", "success");
-    else toast(result.error || "Error", "error");
   }
 
   // --- Schedule ---
@@ -355,31 +328,7 @@ function StaffDetail({
       </Card>
 
       {/* Services */}
-      <Card>
-        <CardHeader>
-          <Heading as="h3" className="text-base">Servicios que ofrece</Heading>
-          <Text size="sm" variant="muted">Selecciona los servicios que este empleado puede realizar.</Text>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {services.length === 0 ? (
-            <Text size="sm" variant="muted">No hay servicios creados. Crea servicios primero.</Text>
-          ) : (
-            <>
-              {services.map((service) => (
-                <Checkbox
-                  key={service.id}
-                  label={`${service.name} ($${service.price.toLocaleString("es-AR")} · ${service.duration_minutes} min)`}
-                  checked={selectedServiceIds.has(service.id)}
-                  onCheckedChange={() => toggleService(service.id)}
-                />
-              ))}
-              <Button onClick={handleSaveServices} disabled={pending} className="mt-2">
-                {pending ? "Guardando..." : "Guardar servicios"}
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
+      <StaffServicesSection staffId={staff.id} />
 
       {/* Schedule */}
       <Card>
@@ -535,7 +484,7 @@ function StaffDetail({
           <DialogHeader>
             <DialogTitle>Eliminar empleado</DialogTitle>
             <DialogDescription>
-              ¿Estas seguro de que queres eliminar a &quot;{staff.name}&quot;? Se eliminaran tambien sus horarios, servicios asignados y dias libres.
+              ¿Estas seguro de que queres eliminar a &quot;{staff.name}&quot;? Se eliminaran tambien sus servicios, horarios y dias libres.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -547,5 +496,247 @@ function StaffDetail({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Staff Services Section (loaded client-side)
+// ---------------------------------------------------------------------------
+
+function StaffServicesSection({ staffId }: { staffId: string }) {
+  const { toast } = useToast();
+  const [services, setServices] = React.useState<Service[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [pending, setPending] = React.useState(false);
+  const [editingService, setEditingService] = React.useState<Service | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = React.useState(false);
+  const [deleteTarget, setDeleteTarget] = React.useState<Service | null>(null);
+
+  const loadServices = React.useCallback(async () => {
+    const data = await getAllServicesForStaffAction(staffId);
+    setServices(data);
+    setLoading(false);
+  }, [staffId]);
+
+  React.useEffect(() => {
+    loadServices();
+  }, [loadServices]);
+
+  async function handleCreate(formData: FormData) {
+    formData.set("staff_id", staffId);
+    setPending(true);
+    const result = await createService(null, formData);
+    setPending(false);
+    if (result.success) {
+      toast("Servicio creado", "success");
+      setIsCreateOpen(false);
+      loadServices();
+    } else {
+      toast(result.error || "Error", "error");
+    }
+  }
+
+  async function handleUpdate(formData: FormData) {
+    setPending(true);
+    const result = await updateService(null, formData);
+    setPending(false);
+    if (result.success) {
+      toast("Servicio actualizado", "success");
+      setEditingService(null);
+      loadServices();
+    } else {
+      toast(result.error || "Error", "error");
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setPending(true);
+    const result = await deleteService(deleteTarget.id);
+    setPending(false);
+    if (result.success) {
+      toast("Servicio eliminado", "success");
+      setDeleteTarget(null);
+      loadServices();
+    } else {
+      toast(result.error || "Error", "error");
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <Heading as="h3" className="text-base">Servicios</Heading>
+        <Text size="sm" variant="muted">Servicios que este empleado ofrece.</Text>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {loading ? (
+          <Text size="sm" variant="muted">Cargando servicios...</Text>
+        ) : services.length === 0 ? (
+          <Text size="sm" variant="muted">No hay servicios creados para este empleado.</Text>
+        ) : (
+          services.map((service) => (
+            <div key={service.id} className="flex items-center justify-between rounded-xl border p-3">
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <Text size="sm" className="font-medium">{service.name}</Text>
+                  <Badge variant={service.is_active ? "secondary" : "outline"}>
+                    {service.is_active ? "Activo" : "Inactivo"}
+                  </Badge>
+                </div>
+                <Text size="sm" variant="muted">
+                  ${service.price_cash.toLocaleString("es-AR")} efectivo
+                  {service.price_transfer !== service.price_cash && ` · $${service.price_transfer.toLocaleString("es-AR")} transf.`}
+                  {" · "}{service.duration_minutes} min
+                </Text>
+              </div>
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" onClick={() => setEditingService(service)}>
+                  Editar
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(service)} className="text-red-500 hover:text-red-700">
+                  Eliminar
+                </Button>
+              </div>
+            </div>
+          ))
+        )}
+
+        <Button variant="outline" onClick={() => setIsCreateOpen(true)}>
+          + Agregar servicio
+        </Button>
+
+        {/* Create Dialog */}
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Nuevo servicio</DialogTitle>
+              <DialogDescription>Agrega un servicio para este empleado.</DialogDescription>
+            </DialogHeader>
+            <ServiceForm onSubmit={handleCreate} pending={pending} />
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Dialog */}
+        <Dialog open={!!editingService} onOpenChange={(open) => !open && setEditingService(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar servicio</DialogTitle>
+            </DialogHeader>
+            {editingService && (
+              <ServiceForm service={editingService} onSubmit={handleUpdate} pending={pending} />
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Dialog */}
+        <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Eliminar servicio</DialogTitle>
+              <DialogDescription>
+                ¿Estas seguro de que queres eliminar &quot;{deleteTarget?.name}&quot;? Esta accion no se puede deshacer.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
+              <Button variant="destructive" onClick={handleDelete} disabled={pending}>
+                {pending ? "Eliminando..." : "Eliminar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Service Form
+// ---------------------------------------------------------------------------
+
+function ServiceForm({
+  service,
+  onSubmit,
+  pending,
+}: {
+  service?: Service;
+  onSubmit: (formData: FormData) => void;
+  pending: boolean;
+}) {
+  const [name, setName] = React.useState(service?.name ?? "");
+  const [description, setDescription] = React.useState(service?.description ?? "");
+  const [priceTransfer, setPriceTransfer] = React.useState(String(service?.price_transfer ?? ""));
+  const [priceCash, setPriceCash] = React.useState(String(service?.price_cash ?? ""));
+  const [duration, setDuration] = React.useState(String(service?.duration_minutes ?? 30));
+  const [isActive, setIsActive] = React.useState(service?.is_active ?? true);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const formData = new FormData();
+    if (service) formData.set("id", service.id);
+    formData.set("name", name);
+    formData.set("description", description);
+    formData.set("price_transfer", priceTransfer);
+    formData.set("price_cash", priceCash);
+    formData.set("duration_minutes", duration);
+    if (isActive) formData.set("is_active", "on");
+    onSubmit(formData);
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <Input
+        label="Nombre"
+        placeholder="Ej: Corte de pelo"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        required
+      />
+      <Textarea
+        label="Descripcion (opcional)"
+        placeholder="Breve descripcion del servicio"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        rows={2}
+      />
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label="Precio transferencia ($)"
+          type="number"
+          min="0"
+          step="1"
+          placeholder="0"
+          value={priceTransfer}
+          onChange={(e) => setPriceTransfer(e.target.value)}
+        />
+        <Input
+          label="Precio efectivo ($)"
+          type="number"
+          min="0"
+          step="1"
+          placeholder="0"
+          value={priceCash}
+          onChange={(e) => setPriceCash(e.target.value)}
+        />
+      </div>
+      <Input
+        label="Duracion (min)"
+        type="number"
+        min="5"
+        step="5"
+        placeholder="30"
+        value={duration}
+        onChange={(e) => setDuration(e.target.value)}
+        required
+      />
+      <div className="flex items-center justify-between rounded-xl border p-3">
+        <Text size="sm">Servicio activo</Text>
+        <Switch checked={isActive} onCheckedChange={setIsActive} />
+      </div>
+      <Button type="submit" disabled={pending}>
+        {pending ? "Guardando..." : service ? "Guardar cambios" : "Crear servicio"}
+      </Button>
+    </form>
   );
 }

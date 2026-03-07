@@ -164,9 +164,11 @@ export interface EmailSettings {
 export interface Service {
   id: string;
   user_id: string;
+  staff_id: string;
   name: string;
   description: string;
-  price: number;
+  price_transfer: number;
+  price_cash: number;
   duration_minutes: number;
   is_active: boolean;
   sort_order: number;
@@ -184,14 +186,6 @@ export interface StaffMember {
   sort_order: number;
   created_at: string;
   updated_at: string;
-}
-
-export interface StaffService {
-  id: string;
-  staff_id: string;
-  service_id: string;
-  price_override: number | null;
-  duration_override: number | null;
 }
 
 export interface StaffSchedule {
@@ -221,6 +215,7 @@ export interface StaffBlockedTime {
 }
 
 export type AppointmentStatus = "confirmed" | "completed" | "cancelled" | "no_show";
+export type PaymentMethod = "cash" | "transfer";
 
 export interface Appointment {
   id: string;
@@ -234,6 +229,10 @@ export interface Appointment {
   start_time: string;
   end_time: string;
   price: number;
+  discount_code_id: string | null;
+  discount_percent: number;
+  original_price: number | null;
+  payment_method: PaymentMethod | null;
   status: AppointmentStatus;
   notes: string;
   created_at: string;
@@ -243,10 +242,23 @@ export interface Appointment {
 export interface AppointmentWithDetails extends Appointment {
   staff_name: string;
   service_name: string;
+  service_price_transfer: number;
 }
 
 export interface AvailableSlot {
   slot_time: string;
+}
+
+export interface DiscountCode {
+  id: string;
+  user_id: string;
+  code: string;
+  discount_percent: number;
+  max_uses: number;
+  used_count: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Client {
