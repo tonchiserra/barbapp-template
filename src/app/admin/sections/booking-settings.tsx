@@ -14,8 +14,6 @@ export function BookingSettingsForm({ initialSettings }: { initialSettings: Book
   const [pending, setPending] = React.useState(false);
   const [title, setTitle] = React.useState(initialSettings.title);
   const [description, setDescription] = React.useState(initialSettings.description);
-  const [advanceDays, setAdvanceDays] = React.useState(String(initialSettings.advance_days));
-  const [minAdvanceHours, setMinAdvanceHours] = React.useState(String(initialSettings.min_advance_hours));
   const [isVisible, setIsVisible] = React.useState(initialSettings.is_visible);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,8 +23,6 @@ export function BookingSettingsForm({ initialSettings }: { initialSettings: Book
     const fd = new FormData();
     fd.set("title", title);
     fd.set("description", description);
-    fd.set("advance_days", advanceDays);
-    fd.set("min_advance_hours", minAdvanceHours);
     if (isVisible) fd.set("is_visible", "on");
 
     const result = await saveBookingSettings(null, fd);
@@ -81,36 +77,6 @@ export function BookingSettingsForm({ initialSettings }: { initialSettings: Book
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Texto opcional debajo del titulo"
             rows={2}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Reglas */}
-      <Card>
-        <CardHeader>
-          <Heading as="h3" className="text-base">
-            Reglas de reserva
-          </Heading>
-          <Text size="sm" variant="muted">
-            Limites de anticipacion para nuevas reservas
-          </Text>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <Input
-            label="Dias de anticipacion"
-            type="number"
-            min={1}
-            max={365}
-            value={advanceDays}
-            onChange={(e) => setAdvanceDays(e.target.value)}
-          />
-          <Input
-            label="Horas minimas de anticipacion"
-            type="number"
-            min={0}
-            max={72}
-            value={minAdvanceHours}
-            onChange={(e) => setMinAdvanceHours(e.target.value)}
           />
         </CardContent>
       </Card>

@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { ToastProvider } from "@/components/ui";
+import { requireAuth } from "@/lib/auth";
 import { AdminShell } from "./admin-shell";
 
 export default async function AdminLayout({
@@ -8,18 +7,11 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  const session = await requireAuth();
 
   return (
     <ToastProvider>
-      <AdminShell>{children}</AdminShell>
+      <AdminShell session={session}>{children}</AdminShell>
     </ToastProvider>
   );
 }

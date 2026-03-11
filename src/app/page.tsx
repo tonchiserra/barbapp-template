@@ -6,12 +6,14 @@ import { Gallery } from "@/components/sections/gallery";
 import { Multicolumn } from "@/components/sections/multicolumn";
 import { Map } from "@/components/sections/map";
 import { Booking } from "@/components/sections/booking";
-import { getPublicSiteSettings } from "@/lib/queries/site-settings";
+import { Ranking } from "@/components/sections/ranking";
+import { AnimateOnScroll } from "@/components/ui";
+import { getSiteSettings } from "@/lib/queries/site-settings";
 import { generateThemeCss } from "@/lib/theme";
 import { DEFAULT_HEADER_SETTINGS, DEFAULT_FOOTER_SETTINGS, DEFAULT_CAROUSEL_SETTINGS, DEFAULT_VIDEO_SETTINGS, DEFAULT_GALLERY_SETTINGS, DEFAULT_MULTICOLUMN_SETTINGS, DEFAULT_MAP_SETTINGS, DEFAULT_THEME_SETTINGS } from "@/types";
 
 export default async function Home() {
-  const siteSettings = await getPublicSiteSettings();
+  const siteSettings = await getSiteSettings();
   const headerSettings = siteSettings?.header ?? DEFAULT_HEADER_SETTINGS;
   const footerSettings = siteSettings?.footer ?? DEFAULT_FOOTER_SETTINGS;
   const carouselSettings = siteSettings?.carousel ?? DEFAULT_CAROUSEL_SETTINGS;
@@ -26,13 +28,30 @@ export default async function Home() {
     <>
       <style dangerouslySetInnerHTML={{ __html: themeCss }} />
       <Header settings={headerSettings} />
-      <Booking />
-      <Carousel settings={carouselSettings} />
-      <Video settings={videoSettings} />
-      <Gallery settings={gallerySettings} />
-      <Multicolumn settings={multicolumnSettings} />
-      <Map settings={mapSettings} />
-      <Footer settings={footerSettings} />
+      <AnimateOnScroll>
+        <Booking />
+      </AnimateOnScroll>
+      <AnimateOnScroll>
+        <Carousel settings={carouselSettings} />
+      </AnimateOnScroll>
+      <AnimateOnScroll>
+        <Video settings={videoSettings} />
+      </AnimateOnScroll>
+      <AnimateOnScroll>
+        <Gallery settings={gallerySettings} />
+      </AnimateOnScroll>
+      <AnimateOnScroll>
+        <Multicolumn settings={multicolumnSettings} />
+      </AnimateOnScroll>
+      <AnimateOnScroll>
+        <Map settings={mapSettings} />
+      </AnimateOnScroll>
+      <AnimateOnScroll>
+        <Ranking />
+      </AnimateOnScroll>
+      <AnimateOnScroll>
+        <Footer settings={footerSettings} />
+      </AnimateOnScroll>
     </>
   );
 }

@@ -33,7 +33,7 @@ export function ClientsSettings() {
     setExporting(true);
     const allClients = await getAllClientsAction();
 
-    const header = "Nombre,Telefono,Email,Turnos,Dia frecuente,Servicio favorito,Profesional favorito,Metodo de pago,Sucursal,Ultima visita,No asistio,Cancelaciones";
+    const header = "Nombre,Telefono,Email,Turnos,Puntos,Dia frecuente,Servicio favorito,Profesional favorito,Metodo de pago,Sucursal,Ultima visita,No asistio,Cancelaciones";
     const rows = allClients.map((c) => {
       const topDay = getTopDay(c);
       const name = c.name.replace(/"/g, '""');
@@ -44,7 +44,7 @@ export function ClientsSettings() {
       const payment = formatPayment(c.top_payment_method);
       const branch = (c.top_branch_name || "-").replace(/"/g, '""');
       const lastVisit = c.last_visit_date ? formatDate(c.last_visit_date) : "-";
-      return `"${name}","${phone}","${email}",${c.total_appointments},"${topDay}","${service}","${staff}","${payment}","${branch}","${lastVisit}",${c.no_show_count},${c.cancellation_count}`;
+      return `"${name}","${phone}","${email}",${c.total_appointments},${c.points},"${topDay}","${service}","${staff}","${payment}","${branch}","${lastVisit}",${c.no_show_count},${c.cancellation_count}`;
     });
 
     const csv = [header, ...rows].join("\n");
@@ -105,48 +105,52 @@ export function ClientsSettings() {
 
       {/* Table */}
       <div className="overflow-x-auto rounded-xl border">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[1200px] text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
               <th className="px-4 py-3 text-left font-medium">Nombre</th>
-              <th className="hidden px-4 py-3 text-left font-medium md:table-cell">Telefono</th>
-              <th className="hidden px-4 py-3 text-left font-medium md:table-cell">Email</th>
+              <th className="px-4 py-3 text-left font-medium">Telefono</th>
+              <th className="px-4 py-3 text-left font-medium">Email</th>
               <th className="px-4 py-3 text-center font-medium">Turnos</th>
-              <th className="hidden px-4 py-3 text-left font-medium md:table-cell">Servicio fav.</th>
-              <th className="hidden px-4 py-3 text-left font-medium md:table-cell">Profesional fav.</th>
-              <th className="hidden px-4 py-3 text-center font-medium md:table-cell">Pago</th>
-              <th className="hidden px-4 py-3 text-center font-medium md:table-cell">Sucursal</th>
-              <th className="hidden px-4 py-3 text-center font-medium md:table-cell">Dia frec.</th>
+              <th className="px-4 py-3 text-center font-medium">Puntos</th>
+              <th className="px-4 py-3 text-left font-medium">Servicio fav.</th>
+              <th className="px-4 py-3 text-left font-medium">Profesional fav.</th>
+              <th className="px-4 py-3 text-center font-medium">Pago</th>
+              <th className="px-4 py-3 text-center font-medium">Sucursal</th>
+              <th className="px-4 py-3 text-center font-medium">Dia frec.</th>
               <th className="px-4 py-3 text-center font-medium">Ultima visita</th>
-              <th className="hidden px-4 py-3 text-center font-medium md:table-cell">Ausencias</th>
-              <th className="hidden px-4 py-3 text-center font-medium md:table-cell">Cancelaciones</th>
+              <th className="px-4 py-3 text-center font-medium">Ausencias</th>
+              <th className="px-4 py-3 text-center font-medium">Cancelaciones</th>
             </tr>
           </thead>
           <tbody>
             {clients.map((client) => (
               <tr key={client.id} className="border-b last:border-0 transition-colors hover:bg-accent/50">
                 <td className="px-4 py-3 font-medium">{client.name}</td>
-                <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{client.phone || "-"}</td>
-                <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{client.email || "-"}</td>
+                <td className="px-4 py-3 text-muted-foreground">{client.phone || "-"}</td>
+                <td className="px-4 py-3 text-muted-foreground">{client.email || "-"}</td>
                 <td className="px-4 py-3 text-center">
                   <Badge variant="secondary">{client.total_appointments}</Badge>
                 </td>
-                <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{client.top_service_name || "-"}</td>
-                <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{client.top_staff_name || "-"}</td>
-                <td className="hidden px-4 py-3 text-center text-muted-foreground md:table-cell">{formatPayment(client.top_payment_method)}</td>
-                <td className="hidden px-4 py-3 text-center text-muted-foreground md:table-cell">{client.top_branch_name || "-"}</td>
-                <td className="hidden px-4 py-3 text-center text-muted-foreground md:table-cell">{getTopDay(client)}</td>
+                <td className="px-4 py-3 text-center">
+                  <Badge variant="outline">{client.points}</Badge>
+                </td>
+                <td className="px-4 py-3 text-muted-foreground">{client.top_service_name || "-"}</td>
+                <td className="px-4 py-3 text-muted-foreground">{client.top_staff_name || "-"}</td>
+                <td className="px-4 py-3 text-center text-muted-foreground">{formatPayment(client.top_payment_method)}</td>
+                <td className="px-4 py-3 text-center text-muted-foreground">{client.top_branch_name || "-"}</td>
+                <td className="px-4 py-3 text-center text-muted-foreground">{getTopDay(client)}</td>
                 <td className="px-4 py-3 text-center text-muted-foreground">
                   {client.last_visit_date ? formatDate(client.last_visit_date) : "-"}
                 </td>
-                <td className="hidden px-4 py-3 text-center md:table-cell">
+                <td className="px-4 py-3 text-center">
                   {client.no_show_count > 0 ? (
                     <Badge variant="destructive">{client.no_show_count}</Badge>
                   ) : (
                     <span className="text-muted-foreground">0</span>
                   )}
                 </td>
-                <td className="hidden px-4 py-3 text-center md:table-cell">
+                <td className="px-4 py-3 text-center">
                   {client.cancellation_count > 0 ? (
                     <Badge variant="outline">{client.cancellation_count}</Badge>
                   ) : (

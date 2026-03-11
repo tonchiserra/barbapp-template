@@ -10,15 +10,25 @@ import {
 } from "@/components/ui";
 import { uploadImage, deleteImage, validateImageFile } from "@/lib/storage";
 import {
-  createStaff, updateStaff, deleteStaff,
+  updateStaff,
   createService, updateService, deleteService,
   getAllServicesForStaffAction,
   updateStaffSchedule,
   addStaffTimeOff, removeStaffTimeOff,
   addStaffBlockedTime, removeStaffBlockedTime,
+  getStaffEarnings,
+  getSpecialPricesForService, addServiceSpecialPrice, removeServiceSpecialPrice,
 } from "@/app/admin/turnero-actions";
-import type { StaffMember, Branch, Service, StaffSchedule, StaffTimeOff, StaffBlockedTime } from "@/types";
+import type { StaffEarningsPeriod } from "@/app/admin/turnero-actions";
+import type { AuthSession } from "@/lib/auth";
+import type { StaffMember, Branch, Service, ServiceSpecialPrice, StaffSchedule, StaffTimeOff, StaffBlockedTime } from "@/types";
 import { DAY_NAMES } from "@/types";
+
+const ROLE_LABELS: Record<string, string> = {
+  owner: "Dueño",
+  manager: "Encargado",
+  employee: "Empleado",
+};
 
 interface StaffSettingsProps {
   staff: StaffMember[];
@@ -26,9 +36,10 @@ interface StaffSettingsProps {
   staffTimeOff: StaffTimeOff[];
   staffBlockedTimes: StaffBlockedTime[];
   branches: Branch[];
+  session: AuthSession;
 }
 
-export function StaffSettings({ staff, staffSchedules, staffTimeOff, staffBlockedTimes, branches }: StaffSettingsProps) {
+export function StaffSettings({ staff, staffSchedules, staffTimeOff, staffBlockedTimes, branches, session }: StaffSettingsProps) {
   const [selectedStaffId, setSelectedStaffId] = React.useState<string | null>(null);
 
   const selectedStaff = staff.find((s) => s.id === selectedStaffId);
@@ -42,6 +53,7 @@ export function StaffSettings({ staff, staffSchedules, staffTimeOff, staffBlocke
         blockedTimes={staffBlockedTimes.filter((bt) => bt.staff_id === selectedStaff.id)}
         branches={branches}
         onBack={() => setSelectedStaffId(null)}
+        session={session}
       />
     );
   }
@@ -51,6 +63,7 @@ export function StaffSettings({ staff, staffSchedules, staffTimeOff, staffBlocke
       staff={staff}
       branches={branches}
       onSelect={(id) => setSelectedStaffId(id)}
+      session={session}
     />
   );
 }
@@ -59,21 +72,12 @@ export function StaffSettings({ staff, staffSchedules, staffTimeOff, staffBlocke
 // Staff List
 // ---------------------------------------------------------------------------
 
-function StaffList({ staff, branches, onSelect }: { staff: StaffMember[]; branches: Branch[]; onSelect: (id: string) => void }) {
-  const { toast } = useToast();
-  const [isCreateOpen, setIsCreateOpen] = React.useState(false);
-  const [pending, setPending] = React.useState(false);
+function StaffList({ staff, branches, onSelect, session }: { staff: StaffMember[]; branches: Branch[]; onSelect: (id: string) => void; session: AuthSession }) {
+  const isEmployee = session.role === "employee";
 
-  async function handleCreate(formData: FormData) {
-    setPending(true);
-    const result = await createStaff(null, formData);
-    setPending(false);
-    if (result.success) {
-      toast("Empleado creado", "success");
-      setIsCreateOpen(false);
-    } else {
-      toast(result.error || "Error", "error");
-    }
+  function canAccess(member: StaffMember) {
+    if (isEmployee) return member.id === session.staffId;
+    return true;
   }
 
   return (
@@ -81,88 +85,133 @@ function StaffList({ staff, branches, onSelect }: { staff: StaffMember[]; branch
       {staff.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
-            <Text variant="muted">No hay empleados creados todavia.</Text>
+            <Text variant="muted">No hay empleados en el equipo.</Text>
           </CardContent>
         </Card>
       ) : (
-        staff.map((member) => (
-          <Card key={member.id} className="cursor-pointer transition-colors hover:bg-accent/50" onClick={() => onSelect(member.id)}>
-            <CardHeader className="flex-row items-center justify-between">
-              <div className="flex items-center gap-3">
-                {member.avatar_url ? (
-                  <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border">
-                    <Image src={member.avatar_url} alt={member.name} fill className="object-cover" />
-                  </div>
-                ) : (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                    {member.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div className="flex flex-col gap-0.5">
-                  <div className="flex items-center gap-2">
-                    <Heading as="h3" className="text-base">{member.name}</Heading>
-                    {member.is_owner && <Badge variant="default">Owner</Badge>}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Badge variant={member.is_active ? "secondary" : "outline"}>
-                      {member.is_active ? "Activo" : "Inactivo"}
-                    </Badge>
-                    {member.branch_id && branches.find((b) => b.id === member.branch_id) && (
-                      <Text size="sm" variant="muted">
-                        {branches.find((b) => b.id === member.branch_id)!.name}
-                      </Text>
-                    )}
+        staff.map((member) => {
+          const accessible = canAccess(member);
+          return (
+            <Card
+              key={member.id}
+              className={accessible ? "cursor-pointer transition-colors hover:bg-accent/50" : "opacity-50"}
+              onClick={accessible ? () => onSelect(member.id) : undefined}
+            >
+              <CardHeader className="flex-row items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {member.avatar_url ? (
+                    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border">
+                      <Image src={member.avatar_url} alt={member.name} fill className="object-cover" />
+                    </div>
+                  ) : (
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                      {member.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-2">
+                      <Heading as="h3" className="text-base">{member.name}</Heading>
+                      {ROLE_LABELS[member.role] && (
+                        <Badge variant={member.role === "owner" ? "default" : "secondary"}>
+                          {ROLE_LABELS[member.role]}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant={member.is_active ? "secondary" : "outline"}>
+                        {member.is_active ? "Activo" : "Inactivo"}
+                      </Badge>
+                      {member.branch_id && branches.find((b) => b.id === member.branch_id) && (
+                        <Text size="sm" variant="muted">
+                          {branches.find((b) => b.id === member.branch_id)!.name}
+                        </Text>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-muted-foreground">
-                <path d="m9 18 6-6-6-6" />
-              </svg>
-            </CardHeader>
-          </Card>
-        ))
+                {accessible && (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-muted-foreground">
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                )}
+              </CardHeader>
+            </Card>
+          );
+        })
       )}
-
-      <Button variant="outline" onClick={() => setIsCreateOpen(true)}>
-        + Agregar empleado
-      </Button>
-
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nuevo empleado</DialogTitle>
-            <DialogDescription>Agrega un empleado a tu equipo.</DialogDescription>
-          </DialogHeader>
-          <StaffCreateForm onSubmit={handleCreate} pending={pending} />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
 
-function StaffCreateForm({ onSubmit, pending }: { onSubmit: (fd: FormData) => void; pending: boolean }) {
-  const [name, setName] = React.useState("");
-  const [isOwner, setIsOwner] = React.useState(false);
+// ---------------------------------------------------------------------------
+// Staff Earnings Card
+// ---------------------------------------------------------------------------
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const fd = new FormData();
-    fd.set("name", name);
-    if (isOwner) fd.set("is_owner", "on");
-    onSubmit(fd);
+function formatARS(amount: number): string {
+  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 0 }).format(amount);
+}
+
+function StaffEarningsCard({ staffId, commissionPercent }: { staffId: string; commissionPercent: number }) {
+  const [earnings, setEarnings] = React.useState<{
+    today: StaffEarningsPeriod;
+    week: StaffEarningsPeriod;
+    month: StaffEarningsPeriod;
+  } | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    setLoading(true);
+    getStaffEarnings(staffId).then((data) => {
+      setEarnings(data);
+      setLoading(false);
+    });
+  }, [staffId]);
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <Heading as="h3" className="text-base">Ganancias</Heading>
+        </CardHeader>
+        <CardContent>
+          <Text variant="muted" size="sm">Cargando...</Text>
+        </CardContent>
+      </Card>
+    );
   }
 
+  if (!earnings) return null;
+
+  const periods = [
+    { label: "Hoy", data: earnings.today },
+    { label: "Semana", data: earnings.week },
+    { label: "Mes", data: earnings.month },
+  ];
+
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <Input label="Nombre" placeholder="Ej: Juan" value={name} onChange={(e) => setName(e.target.value)} required />
-      <div className="flex items-center justify-between rounded-xl border p-3">
-        <Text size="sm">Es el dueño</Text>
-        <Switch checked={isOwner} onCheckedChange={setIsOwner} />
-      </div>
-      <Button type="submit" disabled={pending}>
-        {pending ? "Creando..." : "Crear empleado"}
-      </Button>
-    </form>
+    <Card>
+      <CardHeader>
+        <Heading as="h3" className="text-base">Ganancias</Heading>
+        <Text size="sm" variant="muted">Comision: {commissionPercent}%</Text>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-3 gap-3">
+          {periods.map((p) => {
+            const commission = Math.round(p.data.revenue * commissionPercent / 100);
+            return (
+              <div key={p.label} className="flex flex-col gap-1 rounded-xl border p-3">
+                <Text size="sm" variant="muted">{p.label}</Text>
+                <Text size="sm">{p.data.count} turnos</Text>
+                <Text size="sm">{formatARS(p.data.revenue)}</Text>
+                <Text size="sm" className="font-semibold text-emerald-600">
+                  {formatARS(commission)}
+                </Text>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -177,6 +226,7 @@ function StaffDetail({
   blockedTimes,
   branches,
   onBack,
+  session,
 }: {
   staff: StaffMember;
   schedules: StaffSchedule[];
@@ -184,17 +234,23 @@ function StaffDetail({
   blockedTimes: StaffBlockedTime[];
   branches: Branch[];
   onBack: () => void;
+  session: AuthSession;
 }) {
   const { toast } = useToast();
   const [pending, setPending] = React.useState(false);
-  const [deleteOpen, setDeleteOpen] = React.useState(false);
+
+  const canEditAdminFields = session.role === "admin" || session.role === "owner" ||
+    (session.role === "manager" && staff.id !== session.staffId);
 
   // --- General info ---
   const [name, setName] = React.useState(staff.name);
-  const [isOwner, setIsOwner] = React.useState(staff.is_owner);
   const [isActive, setIsActive] = React.useState(staff.is_active);
   const [avatarUrl, setAvatarUrl] = React.useState(staff.avatar_url || "");
   const [branchId, setBranchId] = React.useState(staff.branch_id || "");
+  const [commissionPercent, setCommissionPercent] = React.useState(staff.commission_percent);
+  const [agendaStartDate, setAgendaStartDate] = React.useState(staff.agenda_start_date || "");
+  const [agendaEndDate, setAgendaEndDate] = React.useState(staff.agenda_end_date || "");
+  const [minAdvanceHours, setMinAdvanceHours] = React.useState(staff.min_advance_hours);
   const [avatarUploading, setAvatarUploading] = React.useState(false);
   const avatarInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -208,7 +264,7 @@ function StaffDetail({
       return;
     }
     setAvatarUploading(true);
-    const result = await uploadImage(file, "images", `${staff.user_id}/staff/${staff.id}`);
+    const result = await uploadImage(file, "images", `staff/${staff.id}`);
     setAvatarUploading(false);
     if (avatarInputRef.current) avatarInputRef.current.value = "";
     if (result.error) {
@@ -220,7 +276,7 @@ function StaffDetail({
 
   async function handleAvatarRemove() {
     setAvatarUploading(true);
-    const result = await deleteImage("images", `${staff.user_id}/staff/${staff.id}`);
+    const result = await deleteImage("images", `staff/${staff.id}`);
     setAvatarUploading(false);
     if (result.error) {
       toast(result.error, "error");
@@ -237,24 +293,15 @@ function StaffDetail({
     fd.set("name", name);
     fd.set("avatar_url", avatarUrl);
     fd.set("branch_id", branchId);
-    if (isOwner) fd.set("is_owner", "on");
+    fd.set("commission_percent", String(commissionPercent));
+    fd.set("agenda_start_date", agendaStartDate);
+    fd.set("agenda_end_date", agendaEndDate);
+    fd.set("min_advance_hours", String(minAdvanceHours));
     if (isActive) fd.set("is_active", "on");
     const result = await updateStaff(null, fd);
     setPending(false);
     if (result.success) toast("Datos guardados", "success");
     else toast(result.error || "Error", "error");
-  }
-
-  async function handleDelete() {
-    setPending(true);
-    const result = await deleteStaff(staff.id);
-    setPending(false);
-    if (result.success) {
-      toast("Empleado eliminado", "success");
-      onBack();
-    } else {
-      toast(result.error || "Error", "error");
-    }
   }
 
   // --- Schedule (supports multiple ranges per day) ---
@@ -389,15 +436,15 @@ function StaffDetail({
     <div className="flex flex-col gap-6">
       {/* Back button */}
       <button
-        onClick={onBack}
-        className="flex items-center gap-2 self-start rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-          <path d="m12 19-7-7 7-7" />
-          <path d="M19 12H5" />
-        </svg>
-        Volver al equipo
-      </button>
+          onClick={onBack}
+          className="flex items-center gap-2 self-start rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <path d="m12 19-7-7 7-7" />
+            <path d="M19 12H5" />
+          </svg>
+          Volver al equipo
+        </button>
 
       {/* General info */}
       <Card>
@@ -447,21 +494,26 @@ function StaffDetail({
             </div>
 
             <Input label="Nombre" value={name} onChange={(e) => setName(e.target.value)} required />
-            <div className="flex items-center justify-between rounded-xl border p-3">
-              <Text size="sm">Es el dueño</Text>
-              <Switch checked={isOwner} onCheckedChange={setIsOwner} />
-            </div>
-            <div className="flex items-center justify-between rounded-xl border p-3">
+            {ROLE_LABELS[staff.role] && (
+              <div className="flex items-center justify-between rounded-xl border p-3">
+                <Text size="sm">Rol</Text>
+                <Badge variant={staff.role === "owner" ? "default" : "secondary"}>
+                  {ROLE_LABELS[staff.role]}
+                </Badge>
+              </div>
+            )}
+            <div className={`flex items-center justify-between rounded-xl border p-3 ${!canEditAdminFields ? "opacity-50" : ""}`}>
               <Text size="sm">Activo</Text>
-              <Switch checked={isActive} onCheckedChange={setIsActive} />
+              <Switch checked={isActive} onCheckedChange={setIsActive} disabled={!canEditAdminFields} />
             </div>
             {branches.length > 0 && (
-              <div className="flex flex-col gap-1.5">
+              <div className={`flex flex-col gap-1.5 ${!canEditAdminFields ? "opacity-50" : ""}`}>
                 <Text size="sm" className="font-medium">Sucursal</Text>
                 <select
                   value={branchId}
                   onChange={(e) => setBranchId(e.target.value)}
-                  className="rounded-xl border bg-background px-3 py-2.5 text-sm"
+                  disabled={!canEditAdminFields}
+                  className="rounded-xl border bg-background px-3 py-2.5 text-sm disabled:cursor-not-allowed"
                 >
                   <option value="">Sin sucursal</option>
                   {branches.map((b) => (
@@ -470,17 +522,67 @@ function StaffDetail({
                 </select>
               </div>
             )}
-            <div className="flex gap-2">
-              <Button type="submit" disabled={pending} className="flex-1">
-                {pending ? "Guardando..." : "Guardar"}
-              </Button>
-              <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>
-                Eliminar
-              </Button>
+            <div className={`flex flex-col gap-1.5 ${!canEditAdminFields ? "opacity-50" : ""}`}>
+              <Text size="sm" className="font-medium">Comision (%)</Text>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={commissionPercent}
+                onChange={(e) => setCommissionPercent(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                disabled={!canEditAdminFields}
+                className="rounded-xl border bg-background px-3 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              />
             </div>
+
+            {/* Agenda */}
+            <div className="mt-2 rounded-xl border p-4">
+              <Text size="sm" className="mb-3 font-semibold">Agenda</Text>
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Text size="sm" className="font-medium">Desde</Text>
+                    <input
+                      type="date"
+                      value={agendaStartDate}
+                      onChange={(e) => setAgendaStartDate(e.target.value)}
+                      className="rounded-xl border bg-background px-3 py-2.5 text-sm"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Text size="sm" className="font-medium">Hasta</Text>
+                    <input
+                      type="date"
+                      value={agendaEndDate}
+                      onChange={(e) => setAgendaEndDate(e.target.value)}
+                      className="rounded-xl border bg-background px-3 py-2.5 text-sm"
+                    />
+                  </div>
+                </div>
+                <Text size="sm" variant="muted">Dejá vacío para no limitar.</Text>
+                <div className="flex flex-col gap-1.5">
+                  <Text size="sm" className="font-medium">Horas mínimas de anticipación</Text>
+                  <input
+                    type="number"
+                    min={0}
+                    max={72}
+                    value={minAdvanceHours}
+                    onChange={(e) => setMinAdvanceHours(Math.min(72, Math.max(0, parseInt(e.target.value) || 0)))}
+                    className="rounded-xl border bg-background px-3 py-2.5 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Button type="submit" disabled={pending}>
+              {pending ? "Guardando..." : "Guardar"}
+            </Button>
           </form>
         </CardContent>
       </Card>
+
+      {/* Earnings */}
+      <StaffEarningsCard staffId={staff.id} commissionPercent={commissionPercent} />
 
       {/* Services */}
       <StaffServicesSection staffId={staff.id} />
@@ -599,7 +701,7 @@ function StaffDetail({
       {/* Blocked Times */}
       <Card>
         <CardHeader>
-          <Heading as="h3" className="text-base">Bloqueos de horario</Heading>
+          <Heading as="h3" className="text-base">Bloqueo de horarios</Heading>
           <Text size="sm" variant="muted">Bloquea rangos de horas en fechas especificas (reuniones, descansos, etc).</Text>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -658,23 +760,6 @@ function StaffDetail({
         </CardContent>
       </Card>
 
-      {/* Delete confirmation dialog */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Eliminar empleado</DialogTitle>
-            <DialogDescription>
-              ¿Estas seguro de que queres eliminar a &quot;{staff.name}&quot;? Se eliminaran tambien sus servicios, horarios y dias libres.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancelar</Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={pending}>
-              {pending ? "Eliminando..." : "Eliminar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -691,6 +776,7 @@ function StaffServicesSection({ staffId }: { staffId: string }) {
   const [editingService, setEditingService] = React.useState<Service | null>(null);
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [deleteTarget, setDeleteTarget] = React.useState<Service | null>(null);
+  const [specialPriceTarget, setSpecialPriceTarget] = React.useState<Service | null>(null);
 
   const loadServices = React.useCallback(async () => {
     const data = await getAllServicesForStaffAction(staffId);
@@ -771,6 +857,9 @@ function StaffServicesSection({ staffId }: { staffId: string }) {
                 </Text>
               </div>
               <div className="flex gap-1">
+                <Button variant="ghost" size="sm" onClick={() => setSpecialPriceTarget(service)}>
+                  Precios
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => setEditingService(service)}>
                   Editar
                 </Button>
@@ -826,8 +915,157 @@ function StaffServicesSection({ staffId }: { staffId: string }) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Special Prices Dialog */}
+        {specialPriceTarget && (
+          <SpecialPricesDialog
+            service={specialPriceTarget}
+            open={!!specialPriceTarget}
+            onOpenChange={(open) => !open && setSpecialPriceTarget(null)}
+          />
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Special Prices Dialog
+// ---------------------------------------------------------------------------
+
+function SpecialPricesDialog({
+  service,
+  open,
+  onOpenChange,
+}: {
+  service: Service;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const [prices, setPrices] = React.useState<ServiceSpecialPrice[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [pending, setPending] = React.useState(false);
+  const [newDate, setNewDate] = React.useState("");
+  const [newPriceCash, setNewPriceCash] = React.useState(String(service.price_cash));
+  const [newPriceTransfer, setNewPriceTransfer] = React.useState(String(service.price_transfer));
+
+  const loadPrices = React.useCallback(async () => {
+    const data = await getSpecialPricesForService(service.id);
+    setPrices(data);
+    setLoading(false);
+  }, [service.id]);
+
+  React.useEffect(() => {
+    if (open) loadPrices();
+  }, [open, loadPrices]);
+
+  async function handleAdd() {
+    if (!newDate || !newPriceCash || !newPriceTransfer) return;
+    setPending(true);
+    const result = await addServiceSpecialPrice(
+      service.id,
+      newDate,
+      parseFloat(newPriceCash),
+      parseFloat(newPriceTransfer),
+    );
+    setPending(false);
+    if (result.success) {
+      toast("Precio especial guardado", "success");
+      setNewDate("");
+      setNewPriceCash(String(service.price_cash));
+      setNewPriceTransfer(String(service.price_transfer));
+      loadPrices();
+    } else {
+      toast(result.error || "Error", "error");
+    }
+  }
+
+  async function handleRemove(id: string) {
+    setPending(true);
+    const result = await removeServiceSpecialPrice(id);
+    setPending(false);
+    if (result.success) {
+      toast("Precio especial eliminado", "success");
+      loadPrices();
+    } else {
+      toast(result.error || "Error", "error");
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Precios especiales</DialogTitle>
+          <DialogDescription>
+            Precios para &quot;{service.name}&quot; en fechas especificas.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          {/* Existing special prices */}
+          {loading ? (
+            <Text size="sm" variant="muted">Cargando...</Text>
+          ) : prices.length === 0 ? (
+            <Text size="sm" variant="muted">No hay precios especiales configurados.</Text>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {prices.map((sp) => (
+                <div key={sp.id} className="flex items-center justify-between rounded-xl border p-3">
+                  <div className="flex flex-col gap-0.5">
+                    <Text size="sm" className="font-medium">{sp.date}</Text>
+                    <Text size="sm" variant="muted">
+                      ${sp.price_cash.toLocaleString("es-AR")} efectivo · ${sp.price_transfer.toLocaleString("es-AR")} transf.
+                    </Text>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemove(sp.id)}
+                    disabled={pending}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    Quitar
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add new special price */}
+          <div className="flex flex-col gap-3 rounded-xl border p-3">
+            <Text size="sm" className="font-medium">Agregar precio especial</Text>
+            <Input
+              label="Fecha"
+              type="date"
+              value={newDate}
+              onChange={(e) => setNewDate(e.target.value)}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Efectivo"
+                type="number"
+                min={0}
+                step={0.01}
+                value={newPriceCash}
+                onChange={(e) => setNewPriceCash(e.target.value)}
+              />
+              <Input
+                label="Transferencia"
+                type="number"
+                min={0}
+                step={0.01}
+                value={newPriceTransfer}
+                onChange={(e) => setNewPriceTransfer(e.target.value)}
+              />
+            </div>
+            <Button onClick={handleAdd} disabled={pending || !newDate}>
+              {pending ? "Guardando..." : "Agregar"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

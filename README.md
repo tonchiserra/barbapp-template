@@ -1,6 +1,6 @@
 # Barbapp
 
-Plataforma SaaS para barberos y peluqueros. Cada profesional crea su cuenta, personaliza su landing page publica y gestiona turnos, equipo, clientes y sucursales desde el panel de administracion.
+Plataforma para una barberia o peluqueria. El dueno personaliza su landing page publica y gestiona turnos, equipo, clientes y sucursales desde el panel de administracion. Modelo single-business (un solo negocio por instancia).
 
 ## Stack
 
@@ -32,8 +32,8 @@ npm install
    - Project URL
    - Publishable key (anon key)
 3. Copiar el contenido de `supabase/setup.sql` y ejecutarlo en el **SQL Editor** de Supabase. Este archivo crea todas las tablas, indices, politicas RLS y funciones en una sola ejecucion.
-
 4. En **Authentication > Providers** habilitar Email
+5. Crear el primer usuario owner (ver seccion **Roles y acceso** abajo)
 
 ### 3. Resend
 
@@ -78,12 +78,12 @@ src/
 │   ├── layout.tsx                # Root layout (metadata, fonts)
 │   ├── globals.css               # Tailwind v4, design tokens, animaciones
 │   ├── login/                    # Login (email + password)
-│   ├── registro/                 # Registro de usuario
+│   ├── onboarding/               # Onboarding (nombre y sucursal al primer login)
 │   ├── auth/callback/            # Callback de autenticacion
 │   ├── ui-kit/                   # Referencia visual de componentes
 │   └── admin/                    # Panel de administracion (protegido)
 │       ├── admin-shell.tsx       # Layout con sidebar de navegacion
-│       ├── dashboard/            # Metricas, agenda, proximo turno
+│       ├── dashboard/            # Metricas, caja (comisiones), agenda, historico
 │       ├── header/               # Logo, menu, redes sociales
 │       ├── footer/               # Links y redes del footer
 │       ├── carousel/             # Carrusel de imagenes hero
@@ -96,6 +96,9 @@ src/
 │       ├── equipo/               # Staff + servicios + horarios
 │       ├── clientes/             # CRM de clientes + export CSV
 │       ├── cupones/              # Codigos de descuento
+│       ├── puntos/               # Recompensas y sistema de fidelizacion
+│       ├── productos/            # Catalogo de productos y ventas
+│       ├── ranking/              # Config de ranking publico
 │       ├── sucursales/           # Gestion de sucursales
 │       └── configuracion/        # Config general del turnero
 │
@@ -105,12 +108,14 @@ src/
 │   └── icons/                    # Iconos de redes sociales (IG, FB, TikTok, etc.)
 │
 ├── lib/
+│   ├── auth.ts                   # Sesion centralizada (getAuthSession, requireAuth, requireScope)
+│   ├── permissions.ts            # Roles, scopes y permisos (hasScope, getDefaultRoute)
 │   ├── utils.ts                  # cn(), hexToHsl, luminance, YouTube URL parser
 │   ├── email.ts                  # Envio de emails con Resend
 │   ├── theme.ts                  # Generador de CSS dinamico desde colores
 │   ├── storage.ts                # Upload/delete a Supabase Storage (2MB, validacion)
 │   ├── supabase/                 # Clientes Supabase (client, server, middleware)
-│   └── queries/                  # Data access (site-settings, staff, services, appointments, clients, branches)
+│   └── queries/                  # Data access (site-settings, staff, services, appointments, clients, branches, rewards, ranking)
 │
 ├── types/
 │   └── index.ts                  # Interfaces, defaults y constantes
@@ -124,7 +129,7 @@ src/
 
 ### Landing page publica
 
-Cada usuario tiene su landing page personalizable compuesta por secciones independientes. Cada seccion se puede activar/desactivar y editar desde el admin.
+Landing page personalizable compuesta por secciones independientes. Cada seccion se puede activar/desactivar y editar desde el admin.
 
 | Seccion | Descripcion |
 |---------|-------------|
@@ -135,17 +140,18 @@ Cada usuario tiene su landing page personalizable compuesta por secciones indepe
 | **Multicolumna** | Bloques con imagen, titulo, subtitulo y link. Grid responsive. |
 | **Mapa** | Embed de Google Maps con soporte para multiples ubicaciones. |
 | **Turnero** | Widget completo de reserva de turnos (detalle abajo). |
+| **Ranking** | Top 100 clientes por puntos de fidelidad. Barra de progreso relativa al primero. Configurable desde el admin (titulo, descripcion, visibilidad). |
 | **Footer** | Links de navegacion, iconos de redes sociales. |
 
 **Tema dinamico:** 4 colores base (fondo, texto, primario, secundario) generan automaticamente todo el esquema de colores. Se inyectan como CSS variables en el `<style>` de la landing.
 
 ### Panel de admin
 
-Accesible en `/admin/*`, protegido por middleware de autenticacion. Sidebar con dos grupos de navegacion:
+Accesible en `/admin/*`, protegido por middleware de autenticacion y sistema de roles. Sidebar con dos grupos de navegacion. Las secciones sin permiso aparecen deshabilitadas (visibles pero no clickeables):
 
-**Secciones de landing:** Header, Carrusel, Video, Galeria, Multicolumna, Mapa, Footer, Estilos.
+**Secciones de landing:** Header, Carrusel, Video, Galeria, Multicolumna, Mapa, Ranking, Footer, Estilos. *(solo admin/owner)*
 
-**Gestion del negocio:** Configuracion, Dashboard, Sucursales, Equipo, Clientes, Cupones, Email.
+**Gestion del negocio:** Configuracion, Dashboard, Sucursales, Equipo, Clientes, Cupones, Puntos, Productos, Email. *(visibilidad segun rol)*
 
 ---
 
@@ -158,7 +164,7 @@ El widget de booking guia al cliente paso a paso:
 1. **Sucursal** (solo si hay mas de 1) — Seleccion de ubicacion
 2. **Profesional** — Lista de staff activo (filtrado por sucursal si aplica). Muestra avatar y nombre. Se auto-salta si hay 1 solo profesional.
 3. **Servicio** — Servicios del profesional seleccionado. Muestra nombre, descripcion, duracion y precios (efectivo/transferencia). Se auto-salta si hay 1 solo servicio.
-4. **Fecha** — Calendario mensual. Solo muestra dias habiles del profesional, excluye dias libres. Respeta `advance_days` (ventana maxima) y `min_advance_hours` (anticipacion minima).
+4. **Fecha** — Calendario mensual. Solo muestra dias habiles del profesional, excluye dias libres. Respeta la agenda del profesional (fecha inicio/fin) y sus horas minimas de anticipacion.
 5. **Horario** — Slots disponibles generados en tiempo real. Algoritmo inteligente que genera horarios segun la duracion del servicio, anclados a los limites de turnos existentes para eliminar baches.
 6. **Datos de contacto** — Nombre (obligatorio), telefono (obligatorio), email (opcional).
 7. **Confirmacion** — Resumen completo. Campo opcional para codigo de descuento. Muestra precios en efectivo y transferencia (con descuento si aplica).
@@ -185,9 +191,11 @@ confirmado → cancelado
 confirmado → no asistio
 ```
 
-**Al completar:** Se registra el metodo de pago (efectivo/transferencia). Si es transferencia, el precio se recalcula con `price_transfer` del servicio. Se envia email de finalizacion al cliente.
+**Al completar:** Se registra el metodo de pago (efectivo/transferencia). Si es transferencia, el precio se recalcula con `price_transfer` del servicio. Se envia email de finalizacion al cliente. Se suman puntos de fidelidad al cliente (1 punto por cada $1.000).
 
 **Al cancelar / no asistir:** Se actualizan los contadores del cliente (`cancellation_count`, `no_show_count`).
+
+**Edicion de turnos:** El staff puede modificar el servicio, fecha y horario de un turno confirmado. El precio se recalcula automaticamente (con descuento si aplica). Cancelar y marcar no asistio requiere confirmacion. Se puede revertir a confirmado.
 
 ### Precios duales
 
@@ -203,13 +211,113 @@ Cada servicio tiene dos precios: `price_cash` (efectivo) y `price_transfer` (tra
 
 ---
 
+## Roles y acceso
+
+### Sistema de roles (RBAC)
+
+Cada usuario de la aplicacion tiene una cuenta en Supabase Auth. Al iniciar sesion por primera vez, un flujo de onboarding le pide completar su nombre y sucursal, y crea automaticamente su registro en `staff`. El primer usuario se crea como `owner`; los siguientes como `employee`.
+
+**Relacion clave:** `staff.id = auth.users.id` (el ID del staff ES su ID de Supabase Auth).
+
+| Rol | Descripcion |
+|-----|-------------|
+| **admin** | Cuenta del desarrollador. Acceso total. Oculto en listados de staff. |
+| **owner** | Dueno del negocio. Acceso total incluyendo landing page. |
+| **manager** | Encargado de sucursal. Acceso a gestion del negocio (sin landing page). Solo ve/edita staff de su sucursal. |
+| **employee** | Empleado. Solo puede ver y editar su propio perfil (servicios, horarios, dias libres, bloqueos). |
+
+### Permisos por seccion (scopes)
+
+Las secciones del admin estan protegidas por scopes. Cada rol tiene un conjunto de scopes permitidos definidos en `src/lib/permissions.ts`.
+
+| Scope | admin | owner | manager | employee |
+|-------|:-----:|:-----:|:-------:|:--------:|
+| landing:* (header, carousel, video, gallery, multicolumn, mapa, ranking, footer, estilos) | si | si | no | no |
+| turnero:configuracion | si | si | si | no |
+| turnero:dashboard | si | si | si* | si* |
+| turnero:sucursales | si | si | si | no |
+| turnero:equipo | si | si | si** | si** |
+| turnero:clientes | si | si | si | no |
+| turnero:cupones | si | si | si | no |
+| turnero:puntos | si | si | si | no |
+| turnero:productos | si | si | si | si |
+| turnero:email | si | si | si | no |
+
+*\*dashboard: employee ve solo sus turnos, manager ve turnos de su sucursal*
+*\*\*equipo: employee solo accede a su perfil, manager solo a staff de su sucursal*
+
+### Crear un usuario
+
+1. En Supabase Dashboard > **Authentication** > crear usuario con email y password
+2. El usuario inicia sesion en la app
+3. Aparece el onboarding (`/onboarding`) donde completa su nombre y sucursal
+4. Se crea automaticamente como `owner` (si es el primero) o `employee`
+5. Un owner/admin puede cambiar el rol desde la seccion Equipo
+
+**Nota:** El admin no aparece en listados de staff y no se puede crear desde el onboarding. Para crear o promover un admin manualmente:
+
+```sql
+-- Crear admin nuevo (requiere cuenta en Supabase Auth)
+INSERT INTO public.staff (id, name, role)
+VALUES ('<auth-uid>', 'Admin', 'admin');
+
+-- O promover un usuario existente a admin
+UPDATE public.staff SET role = 'admin' WHERE id = '<auth-uid>';
+```
+
+### Reiniciar la base de datos
+
+Si necesitas borrar todo y empezar de cero, ejecutar en el SQL Editor **antes** de correr `setup.sql`:
+
+```sql
+DROP POLICY IF EXISTS "Authenticated users can upload images" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can update own images" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can delete own images" ON storage.objects;
+DROP POLICY IF EXISTS "Public can view images" ON storage.objects;
+
+DROP TABLE IF EXISTS product_sales CASCADE;
+DROP TABLE IF EXISTS products CASCADE;
+DROP TABLE IF EXISTS point_redemptions CASCADE;
+DROP TABLE IF EXISTS rewards CASCADE;
+DROP TABLE IF EXISTS service_special_prices CASCADE;
+DROP TABLE IF EXISTS staff_blocked_times CASCADE;
+DROP TABLE IF EXISTS staff_time_off CASCADE;
+DROP TABLE IF EXISTS staff_schedules CASCADE;
+DROP TABLE IF EXISTS appointments CASCADE;
+DROP TABLE IF EXISTS discount_codes CASCADE;
+DROP TABLE IF EXISTS services CASCADE;
+DROP TABLE IF EXISTS clients CASCADE;
+DROP TABLE IF EXISTS site_settings CASCADE;
+DROP TABLE IF EXISTS staff CASCADE;
+DROP TABLE IF EXISTS branches CASCADE;
+
+DROP FUNCTION IF EXISTS public.get_my_staff();
+DROP FUNCTION IF EXISTS public.is_staff_member();
+DROP FUNCTION IF EXISTS public.is_owner_or_admin();
+DROP FUNCTION IF EXISTS public.can_manage_staff(uuid);
+DROP FUNCTION IF EXISTS public.handle_updated_at();
+DROP FUNCTION IF EXISTS public.get_available_slots(uuid, uuid, date);
+DROP FUNCTION IF EXISTS public.use_discount_code(text);
+DROP FUNCTION IF EXISTS public.upsert_client(text, text, text, integer, uuid, uuid);
+DROP FUNCTION IF EXISTS public.update_client_on_status_change(text, text);
+DROP FUNCTION IF EXISTS public.add_client_points(text, text, numeric);
+DROP FUNCTION IF EXISTS public.redeem_points(uuid, uuid, uuid);
+DROP FUNCTION IF EXISTS public.get_public_ranking(integer);
+```
+
+---
+
 ## Equipo (staff)
 
 ### Gestion de profesionales
 
-- CRUD completo con nombre, avatar (upload a Storage, max 2MB) y estado activo/inactivo
+- Edicion de nombre, avatar (upload a Storage, max 2MB) y estado activo/inactivo
 - Asignacion a sucursal (opcional)
-- Marca de propietario (`is_owner`)
+- Porcentaje de comision configurable (0-100%, default 50%)
+- Card de ganancias: turnos completados, ingresos totales y comision del empleado para hoy, semana y mes
+- Agenda propia: cada profesional controla desde/hasta cuando acepta citas y las horas minimas de anticipacion
+- Rol visible como badge (Dueno, Encargado, Empleado)
+- Staff no se crea ni elimina desde el admin (se gestiona en Supabase directamente)
 
 ### Horarios semanales
 
@@ -228,6 +336,7 @@ Cada servicio pertenece a un unico profesional (no son globales):
 
 - Nombre, descripcion
 - Precio en efectivo y precio por transferencia
+- Precios especiales por fecha (precio diferente en una fecha especifica, mayor o menor al original)
 - Duracion en minutos
 - Estado activo/inactivo
 - Orden de visualizacion
@@ -236,7 +345,7 @@ Cada servicio pertenece a un unico profesional (no son globales):
 
 ## Clientes (CRM)
 
-Los clientes se crean automaticamente al reservar un turno. Se identifican por telefono (prioridad) o email dentro del mismo negocio.
+Los clientes se crean automaticamente al reservar un turno. Se identifican por telefono (prioridad) o email.
 
 ### Datos auto-computados
 
@@ -275,13 +384,57 @@ Soporte multi-sucursal para negocios con mas de una ubicacion:
 
 ## Dashboard
 
-Vista general del negocio para el admin:
+Vista general del negocio con filtros por sucursal y empleado (owner/admin):
 
-- Turnos del dia con controles de estado (completar, cancelar, no asistio)
-- Proximo turno destacado
-- Metricas de la semana, mes y ano
-- Ingresos por metodo de pago
-- Skeleton de carga durante la hidratacion
+- **Metricas:** Turnos y ingresos del dia, semana y mes. Comparativa porcentual vs periodo anterior.
+- **Caja:** Desglose por empleado con tabs Hoy/Semana/Mes. Muestra turnos completados, ingreso en efectivo y transferencia, comision del empleado y neto para el dueno. Fila de totales al final.
+- **Agenda:** 7 dias con tabs. Turnos con controles de estado (completar, cancelar, no asistio). Proximo turno destacado.
+- **Historico:** Selector de mes para ver metricas de meses anteriores.
+- **Filtros por rol:** Employee ve solo sus turnos, manager ve turnos de su sucursal, owner/admin ve todo con filtros de sucursal y empleado.
+
+---
+
+## Sistema de puntos (fidelizacion)
+
+### Acumulacion
+
+Por cada turno completado, el cliente acumula **1 punto por cada $1.000** del precio final. La asignacion es automatica (fire-and-forget) al marcar el turno como completado. Se identifica al cliente por telefono (prioridad) o email.
+
+### Recompensas
+
+Desde `/admin/puntos` se configuran recompensas canjeables:
+
+- **Producto:** Un item fisico (ej: "Pomada gratis", 50 puntos)
+- **Descuento:** Porcentaje de descuento (ej: "20% off", 30 puntos)
+- Cada recompensa tiene nombre, descripcion, costo en puntos y estado activo/inactivo
+- El canje es atomico (funcion PostgreSQL con `FOR UPDATE` lock para prevenir race conditions)
+
+### Ranking publico
+
+Seccion configurable en la landing page que muestra los **top 100 clientes** por puntos acumulados:
+
+- Barra de progreso relativa al cliente con mas puntos
+- Privacidad: solo muestra nombre + inicial del apellido (ej: "Juan P.")
+- Configurable desde `/admin/ranking` (titulo, descripcion, visibilidad)
+
+---
+
+## Productos
+
+Sistema de catalogo y ventas de productos del negocio. Accesible por todo el staff.
+
+### Catalogo
+
+- CRUD de productos: nombre, precio, foto (upload a Storage)
+- Estado activo/inactivo
+
+### Ventas
+
+- Boton rapido "Vender" en cada producto con selector de cantidad
+- Cada venta queda asociada al empleado que la registro (`staff_id`)
+- Historial paginado con detalle de producto, empleado, fecha y monto
+- Empleados pueden eliminar solo sus propias ventas; admin/owner/manager todas
+- Solo admin/owner/manager pueden eliminar productos
 
 ---
 
@@ -328,38 +481,58 @@ Los colores derivados (muted, border, accent) se calculan automaticamente. El co
 
 | Tabla | Descripcion |
 |-------|-------------|
-| `site_settings` | Config de landing (1 row por usuario, columnas JSONB por seccion) |
+| `site_settings` | Config de landing (singleton, 1 row, columnas JSONB por seccion) |
 | `staff` | Profesionales del equipo |
 | `services` | Servicios (pertenecen a staff) |
+| `service_special_prices` | Precios especiales por fecha para servicios |
 | `staff_schedules` | Horarios semanales (multiples rangos por dia) |
 | `staff_time_off` | Dias libres completos |
 | `staff_blocked_times` | Bloqueos parciales de horario |
 | `appointments` | Turnos reservados |
-| `clients` | Clientes (auto-generados con preferencias computadas) |
+| `clients` | Clientes (auto-generados con preferencias computadas, puntos) |
 | `discount_codes` | Codigos de descuento |
 | `branches` | Sucursales |
+| `rewards` | Recompensas canjeables con puntos |
+| `point_redemptions` | Historial de canjes de puntos |
+| `products` | Catalogo de productos |
+| `product_sales` | Registro de ventas de productos |
 
 ### Seguridad (RLS)
 
-Todas las tablas tienen Row Level Security:
+Todas las tablas tienen Row Level Security con patron basado en roles. Las policies usan funciones helper que verifican membresia y rol del usuario autenticado.
 
 | Tabla | SELECT | INSERT | UPDATE | DELETE |
 |-------|--------|--------|--------|--------|
-| site_settings | owner | owner | owner | owner |
-| staff, services, schedules | publico | owner | owner | owner |
-| branches | publico (activas) | owner | owner | owner |
-| appointments | owner | cualquiera | owner | owner |
-| clients | owner | cualquiera | cualquiera | — |
-| discount_codes | publico | owner | owner | owner |
+| site_settings | publico | owner/admin | owner/admin | owner/admin |
+| branches | publico (activas) + miembros | owner/admin | owner/admin | owner/admin |
+| staff | publico (activos, no admin) + miembros | — (via Supabase) | segun rol* | — (via Supabase) |
+| services, schedules, time_off, blocked_times | publico | segun rol* | segun rol* | segun rol* |
+| appointments | miembros del negocio | cualquiera | miembros | miembros |
+| clients | miembros del negocio | cualquiera | cualquiera | — |
+| discount_codes | publico | miembros | miembros | miembros |
+| rewards | publico | miembros | miembros | miembros |
+| point_redemptions | miembros | miembros | — | — |
+| products | publico | miembros | miembros | miembros |
+| product_sales | miembros | miembros | — | miembros |
+
+*\*admin/owner: cualquier staff del negocio. manager: staff de su sucursal. employee: solo su propio perfil.*
 
 ### Funciones PostgreSQL
 
 | Funcion | Descripcion |
 |---------|-------------|
+| `onboard_staff(name, branch_id)` | Crea el registro staff para el usuario autenticado (owner si es el primero, employee si no) |
+| `is_staff_member()` | Verifica si el usuario autenticado es miembro del staff |
+| `is_owner_or_admin()` | Verifica si el usuario tiene rol admin u owner |
+| `can_manage_staff(staff_id)` | Verifica si puede gestionar un staff segun su rol |
+| `get_my_staff()` | Devuelve el registro staff del usuario autenticado |
 | `get_available_slots()` | Genera slots disponibles (inteligente, sin baches) |
 | `upsert_client()` | Crea/actualiza cliente y recomputa preferencias |
 | `update_client_on_status_change()` | Actualiza contadores al cambiar estado de turno |
 | `use_discount_code()` | Valida y consume codigo de descuento (atomico) |
+| `add_client_points()` | Suma puntos de fidelidad al cliente segun precio |
+| `redeem_points()` | Canjea puntos por recompensa (atomico, FOR UPDATE lock) |
+| `get_public_ranking()` | Top N clientes por puntos (nombre + inicial, SECURITY DEFINER) |
 | `handle_updated_at()` | Trigger para timestamp `updated_at` |
 
 ---

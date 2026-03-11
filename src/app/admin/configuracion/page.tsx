@@ -1,17 +1,11 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireScope } from "@/lib/auth";
 import { getBookingSettings } from "@/lib/queries/site-settings";
 import { BookingSettingsForm } from "../sections/booking-settings";
 
 export default async function ConfiguracionPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await requireScope('turnero:configuracion');
 
-  if (!user) redirect("/login");
-
-  const bookingSettings = await getBookingSettings(user.id);
+  const bookingSettings = await getBookingSettings();
 
   return <BookingSettingsForm initialSettings={bookingSettings} />;
 }

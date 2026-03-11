@@ -1,17 +1,11 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireScope } from "@/lib/auth";
 import { getVideoSettings } from "@/lib/queries/site-settings";
 import { VideoSettingsForm } from "../sections/video-settings";
 
 export default async function VideoPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await requireScope('landing:video');
 
-  if (!user) redirect("/login");
-
-  const videoSettings = await getVideoSettings(user.id);
+  const videoSettings = await getVideoSettings();
 
   return <VideoSettingsForm initialSettings={videoSettings} />;
 }

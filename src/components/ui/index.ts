@@ -55,6 +55,8 @@ export { ImageUpload } from "./image-upload";
 
 export { ToastProvider, useToast } from "./toast";
 
+export { AnimateOnScroll } from "./animate-on-scroll";
+
 export {
   Dialog,
   DialogTrigger,

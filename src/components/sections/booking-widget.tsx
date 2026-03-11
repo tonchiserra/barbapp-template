@@ -11,12 +11,13 @@ import {
   getStaffTimeOffDatesAction,
   createAppointment,
   validateDiscountCodeAction,
+  getSpecialPriceAction,
 } from "@/app/admin/turnero-actions";
 import type { BookingSettings, StaffMember, Branch } from "@/types";
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, format, addMonths, isSameMonth,
-  isSameDay, isAfter, isBefore, addDays,
+  isSameDay, isAfter, isBefore, addDays, parseISO, max,
 } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -35,10 +36,9 @@ interface BookingWidgetProps {
   settings: BookingSettings;
   staff: StaffMember[];
   branches: Branch[];
-  userId: string;
 }
 
-export function BookingWidget({ settings, staff: initialStaff, branches, userId }: BookingWidgetProps) {
+export function BookingWidget({ settings, staff: initialStaff, branches }: BookingWidgetProps) {
   const showBranchStep = branches.length > 1;
   const firstStep: BookingStep = showBranchStep ? "branch" : "staff";
 
@@ -66,6 +66,9 @@ export function BookingWidget({ settings, staff: initialStaff, branches, userId 
   const [loading, setLoading] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState("");
+
+  // Special price override for selected date
+  const [specialPrice, setSpecialPrice] = React.useState<{ price_cash: number; price_transfer: number } | null>(null);
 
   // Discount code
   const [discountCode, setDiscountCode] = React.useState("");
@@ -114,6 +117,7 @@ export function BookingWidget({ settings, staff: initialStaff, branches, userId 
     setSelectedService(null);
     setSelectedDate(null);
     setSelectedTime(null);
+    setSpecialPrice(null);
     setStep("service");
     setLoading(true);
 
@@ -140,6 +144,7 @@ export function BookingWidget({ settings, staff: initialStaff, branches, userId 
   function handleSelectService(service: StaffService) {
     setSelectedService(service);
     setSelectedDate(null);
+    setSpecialPrice(null);
     setSelectedTime(null);
     setStep("date");
   }
@@ -147,11 +152,16 @@ export function BookingWidget({ settings, staff: initialStaff, branches, userId 
   async function handleSelectDate(date: Date) {
     setSelectedDate(date);
     setSelectedTime(null);
+    setSpecialPrice(null);
     if (!selectedStaff || !selectedService) return;
     setLoading(true);
     const dateStr = format(date, "yyyy-MM-dd");
-    const slots = await getAvailableSlotsAction(selectedStaff.id, selectedService.id, dateStr);
+    const [slots, special] = await Promise.all([
+      getAvailableSlotsAction(selectedStaff.id, selectedService.id, dateStr),
+      getSpecialPriceAction(selectedService.id, dateStr),
+    ]);
     setAvailableSlots(slots.map((s) => s.slot_time));
+    setSpecialPrice(special);
     setLoading(false);
     setStep("time");
   }
@@ -170,7 +180,7 @@ export function BookingWidget({ settings, staff: initialStaff, branches, userId 
     if (!discountCode.trim()) return;
     setValidatingDiscount(true);
     setDiscountError("");
-    const result = await validateDiscountCodeAction(discountCode.trim(), userId);
+    const result = await validateDiscountCodeAction(discountCode.trim());
     setValidatingDiscount(false);
     if (result.valid) {
       setAppliedDiscount({
@@ -372,8 +382,9 @@ export function BookingWidget({ settings, staff: initialStaff, branches, userId 
           )}
           {step === "date" && (
             <DateStep
-              advanceDays={settings.advance_days}
-              minAdvanceHours={settings.min_advance_hours}
+              agendaStartDate={selectedStaff?.agenda_start_date ?? null}
+              agendaEndDate={selectedStaff?.agenda_end_date ?? null}
+              minAdvanceHours={selectedStaff?.min_advance_hours ?? 2}
               staffSchedule={staffSchedule}
               staffTimeOffDates={staffTimeOffDates}
               selectedDate={selectedDate}
@@ -398,7 +409,9 @@ export function BookingWidget({ settings, staff: initialStaff, branches, userId 
           {step === "confirm" && selectedService && (
             <ConfirmStep
               service={selectedService}
+              specialPrice={specialPrice}
               staffName={selectedStaff!.name}
+              branchAddress={selectedBranch?.address ?? null}
               date={selectedDate!}
               time={selectedTime!}
               name={contactName}
@@ -548,7 +561,8 @@ function StaffStep({ staff, onSelect, loading }: {
 // ---------------------------------------------------------------------------
 
 function DateStep({
-  advanceDays,
+  agendaStartDate,
+  agendaEndDate,
   minAdvanceHours,
   staffSchedule,
   staffTimeOffDates,
@@ -556,7 +570,8 @@ function DateStep({
   onSelect,
   loading,
 }: {
-  advanceDays: number;
+  agendaStartDate: string | null;
+  agendaEndDate: string | null;
   minAdvanceHours: number;
   staffSchedule: { day_of_week: number; is_working: boolean }[];
   staffTimeOffDates: string[];
@@ -568,8 +583,13 @@ function DateStep({
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const minDate = addDays(today, 0);
-  const maxDate = addDays(today, advanceDays);
+  const minDate = agendaStartDate
+    ? max([parseISO(agendaStartDate), today])
+    : today;
+  const parsedEnd = agendaEndDate ? parseISO(agendaEndDate) : null;
+  const maxDate = parsedEnd && isAfter(parsedEnd, today)
+    ? parsedEnd
+    : addDays(today, 365);
 
   const timeOffSet = new Set(staffTimeOffDates);
   const workingDays = new Set(staffSchedule.filter((s) => s.is_working).map((s) => s.day_of_week));
@@ -743,13 +763,15 @@ function ContactStep({
 // ---------------------------------------------------------------------------
 
 function ConfirmStep({
-  service, staffName, date, time, name, phone, email,
+  service, specialPrice, staffName, branchAddress, date, time, name, phone, email,
   onConfirm, submitting, error,
   discountCode, discountError, appliedDiscount, validatingDiscount,
   onDiscountCodeChange, onApplyDiscount, onRemoveDiscount,
 }: {
   service: StaffService;
+  specialPrice: { price_cash: number; price_transfer: number } | null;
   staffName: string;
+  branchAddress: string | null;
   date: Date;
   time: string;
   name: string;
@@ -766,6 +788,8 @@ function ConfirmStep({
   onApplyDiscount: () => void;
   onRemoveDiscount: () => void;
 }) {
+  const effectiveCash = specialPrice?.price_cash ?? service.price_cash;
+  const effectiveTransfer = specialPrice?.price_transfer ?? service.price_transfer;
   const discountMult = appliedDiscount ? (1 - appliedDiscount.discount_percent / 100) : 1;
   const applyDisc = (p: number) => Math.round(p * discountMult * 100) / 100;
 
@@ -782,6 +806,12 @@ function ConfirmStep({
             <Text size="sm" variant="muted">Profesional</Text>
             <Text size="sm" className="font-medium">{staffName}</Text>
           </div>
+          {branchAddress && (
+            <div className="flex justify-between gap-4">
+              <Text size="sm" variant="muted" className="shrink-0">Direccion</Text>
+              <Text size="sm" className="font-medium text-right">{branchAddress}</Text>
+            </div>
+          )}
           <div className="flex justify-between">
             <Text size="sm" variant="muted">Fecha</Text>
             <Text size="sm" className="font-medium capitalize">
@@ -848,24 +878,24 @@ function ConfirmStep({
           <div className="flex justify-between">
             <Text size="sm" variant="muted">Efectivo</Text>
             <div className="flex items-center gap-2">
-              {appliedDiscount && (
+              {(appliedDiscount || specialPrice) && (
                 <Text size="sm" variant="muted" className="line-through">
                   ${service.price_cash.toLocaleString("es-AR")}
                 </Text>
               )}
-              <Text className="font-semibold">${applyDisc(service.price_cash).toLocaleString("es-AR")}</Text>
+              <Text className="font-semibold">${applyDisc(effectiveCash).toLocaleString("es-AR")}</Text>
             </div>
           </div>
-          {service.price_transfer !== service.price_cash && (
+          {effectiveTransfer !== effectiveCash && (
             <div className="flex justify-between">
               <Text size="sm" variant="muted">Transferencia</Text>
               <div className="flex items-center gap-2">
-                {appliedDiscount && (
+                {(appliedDiscount || specialPrice) && (
                   <Text size="sm" variant="muted" className="line-through">
                     ${service.price_transfer.toLocaleString("es-AR")}
                   </Text>
                 )}
-                <Text className="font-semibold">${applyDisc(service.price_transfer).toLocaleString("es-AR")}</Text>
+                <Text className="font-semibold">${applyDisc(effectiveTransfer).toLocaleString("es-AR")}</Text>
               </div>
             </div>
           )}

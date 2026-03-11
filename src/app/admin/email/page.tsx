@@ -1,17 +1,11 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireScope } from "@/lib/auth";
 import { getEmailSettings } from "@/lib/queries/site-settings";
 import { EmailSettingsForm } from "../sections/email-settings";
 
 export default async function EmailPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await requireScope('turnero:email');
 
-  if (!user) redirect("/login");
-
-  const emailSettings = await getEmailSettings(user.id);
+  const emailSettings = await getEmailSettings();
 
   return <EmailSettingsForm initialSettings={emailSettings} />;
 }

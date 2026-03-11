@@ -138,8 +138,6 @@ export interface VideoSettings {
 export interface BookingSettings {
   title: string;
   description: string;
-  advance_days: number;
-  min_advance_hours: number;
   is_visible: boolean;
 }
 
@@ -163,7 +161,6 @@ export interface EmailSettings {
 
 export interface Service {
   id: string;
-  user_id: string;
   staff_id: string;
   name: string;
   description: string;
@@ -176,9 +173,17 @@ export interface Service {
   updated_at: string;
 }
 
+export interface ServiceSpecialPrice {
+  id: string;
+  service_id: string;
+  date: string;
+  price_cash: number;
+  price_transfer: number;
+  created_at: string;
+}
+
 export interface Branch {
   id: string;
-  user_id: string;
   name: string;
   address: string;
   is_active: boolean;
@@ -187,14 +192,19 @@ export interface Branch {
   updated_at: string;
 }
 
+export type Role = "admin" | "owner" | "manager" | "employee";
+
 export interface StaffMember {
   id: string;
-  user_id: string;
   name: string;
   avatar_url: string;
   branch_id: string | null;
-  is_owner: boolean;
+  role: Role;
   is_active: boolean;
+  commission_percent: number;
+  agenda_start_date: string | null;
+  agenda_end_date: string | null;
+  min_advance_hours: number;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -231,7 +241,6 @@ export type PaymentMethod = "cash" | "transfer";
 
 export interface Appointment {
   id: string;
-  user_id: string;
   staff_id: string;
   service_id: string;
   client_name: string;
@@ -263,7 +272,6 @@ export interface AvailableSlot {
 
 export interface DiscountCode {
   id: string;
-  user_id: string;
   code: string;
   discount_percent: number;
   max_uses: number;
@@ -275,7 +283,6 @@ export interface DiscountCode {
 
 export interface Client {
   id: string;
-  user_id: string;
   name: string;
   phone: string;
   email: string;
@@ -294,6 +301,8 @@ export interface Client {
   last_visit_date: string | null;
   no_show_count: number;
   cancellation_count: number;
+  points: number;
+  total_points_earned: number;
   created_at: string;
   updated_at: string;
 }
@@ -304,9 +313,70 @@ export interface ClientWithDetails extends Client {
   top_branch_name: string | null;
 }
 
+// --- Loyalty Points ---
+
+export type RewardType = "product" | "discount";
+
+export interface Reward {
+  id: string;
+  name: string;
+  description: string;
+  points_cost: number;
+  type: RewardType;
+  discount_percent: number | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PointRedemption {
+  id: string;
+  client_id: string;
+  reward_id: string | null;
+  reward_name: string;
+  points_spent: number;
+  redeemed_by: string | null;
+  created_at: string;
+}
+
+// --- Products ---
+
+export interface Product {
+  id: string;
+  name: string;
+  price: number;
+  image_url: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductSale {
+  id: string;
+  product_id: string;
+  staff_id: string;
+  price: number;
+  quantity: number;
+  created_at: string;
+}
+
+export interface ProductSaleWithDetails extends ProductSale {
+  product_name: string;
+  staff_name: string;
+}
+
+// --- Ranking ---
+
+export interface RankingSettings {
+  title: string;
+  description: string;
+  is_visible: boolean;
+}
+
 export interface SiteSettings {
   id: string;
-  user_id: string;
   header: HeaderSettings;
   footer: FooterSettings;
   carousel: CarouselSettings;
@@ -317,6 +387,7 @@ export interface SiteSettings {
   booking: BookingSettings;
   theme: ThemeSettings;
   email: EmailSettings;
+  ranking: RankingSettings;
   created_at: string;
   updated_at: string;
 }
@@ -418,8 +489,6 @@ export const DEFAULT_CAROUSEL_SLIDE: CarouselSlide = {
 export const DEFAULT_BOOKING_SETTINGS: BookingSettings = {
   title: "Reserva tu turno",
   description: "",
-  advance_days: 30,
-  min_advance_hours: 2,
   is_visible: true,
 };
 
@@ -435,6 +504,12 @@ export const DEFAULT_EMAIL_SETTINGS: EmailSettings = {
   greeting: "Gracias por tu visita, {nombre}!",
   body: "Tu turno fue completado con exito. Aca tenes el resumen:",
   farewell: "Te esperamos de nuevo!",
+};
+
+export const DEFAULT_RANKING_SETTINGS: RankingSettings = {
+  title: "Ranking de Clientes",
+  description: "",
+  is_visible: false,
 };
 
 export const DEFAULT_SCHEDULE: Omit<StaffSchedule, "id" | "staff_id">[] = [

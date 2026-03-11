@@ -7,31 +7,30 @@ import {
   Card,
   CardHeader,
   CardContent,
-  CardFooter,
   Heading,
   Text,
-  Link,
-  Separator,
 } from "@/components/ui";
-import { signup } from "./actions";
+import { login } from "./actions";
 
-export default function RegistroPage() {
+export function LoginForm({ accessError }: { accessError?: string }) {
   const [state, formAction, pending] = useActionState(
     async (_prev: { error: string } | null, formData: FormData) => {
-      return await signup(formData);
+      return await login(formData);
     },
     null,
   );
+
+  const errorMessage = state?.error || accessError;
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
           <Heading as="h1" className="text-2xl">
-            Crear cuenta
+            Iniciar sesion
           </Heading>
           <Text size="sm" variant="muted">
-            Registrate para comenzar a usar Barbapp
+            Ingresa tus credenciales para acceder
           </Text>
         </CardHeader>
         <CardContent>
@@ -48,18 +47,10 @@ export default function RegistroPage() {
               name="password"
               type="password"
               label="Contrasena"
-              placeholder="Minimo 6 caracteres"
+              placeholder="Tu contrasena"
               required
-              autoComplete="new-password"
-            />
-            <Input
-              name="confirmPassword"
-              type="password"
-              label="Confirmar contrasena"
-              placeholder="Repeti tu contrasena"
-              required
-              autoComplete="new-password"
-              error={state?.error}
+              autoComplete="current-password"
+              error={errorMessage}
             />
             <Button
               type="submit"
@@ -67,17 +58,10 @@ export default function RegistroPage() {
               className="w-full"
               disabled={pending}
             >
-              {pending ? "Creando cuenta..." : "Crear cuenta"}
+              {pending ? "Ingresando..." : "Iniciar sesion"}
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex-col gap-4">
-          <Separator />
-          <Text size="sm" variant="muted" className="text-center">
-            Ya tenes cuenta?{" "}
-            <Link href="/login">Iniciar sesion</Link>
-          </Text>
-        </CardFooter>
       </Card>
     </div>
   );

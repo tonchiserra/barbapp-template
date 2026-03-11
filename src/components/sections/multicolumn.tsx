@@ -39,15 +39,17 @@ export function Multicolumn({ settings, className }: MulticolumnProps) {
 function Block({ block }: { block: MulticolumnBlock }) {
   const content = (
     <div className="flex flex-col items-center gap-3 text-center">
-      <div className="relative aspect-square w-full overflow-hidden rounded-2xl">
-        <Image
-          src={block.image_url}
-          alt={block.title || ""}
-          fill
-          className="object-cover"
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-        />
-      </div>
+      {block.image_url && (
+        <div className="relative aspect-square w-full overflow-hidden rounded-2xl">
+          <Image
+            src={block.image_url}
+            alt={block.title || ""}
+            fill
+            className="object-cover"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+          />
+        </div>
+      )}
       {block.title && (
         <Heading as="h3" className="text-base">
           {block.title}

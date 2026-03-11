@@ -2,14 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import type { Appointment, AppointmentWithDetails, AvailableSlot } from "@/types";
 
 export async function getAppointmentsByDate(
-  userId: string,
   date: string,
 ): Promise<AppointmentWithDetails[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("appointments")
     .select("*, staff:staff_id(name), service:service_id(name, price_transfer)")
-    .eq("user_id", userId)
     .eq("date", date)
     .order("start_time");
 
@@ -27,7 +25,6 @@ export async function getAppointmentsByDate(
 }
 
 export async function getAppointmentsForRangeWithDetails(
-  userId: string,
   startDate: string,
   endDate: string,
 ): Promise<AppointmentWithDetails[]> {
@@ -35,7 +32,6 @@ export async function getAppointmentsForRangeWithDetails(
   const { data } = await supabase
     .from("appointments")
     .select("*, staff:staff_id(name), service:service_id(name, price_transfer)")
-    .eq("user_id", userId)
     .gte("date", startDate)
     .lte("date", endDate)
     .order("start_time");
@@ -54,7 +50,6 @@ export async function getAppointmentsForRangeWithDetails(
 }
 
 export async function getAppointmentsForRange(
-  userId: string,
   startDate: string,
   endDate: string,
 ): Promise<Appointment[]> {
@@ -62,22 +57,18 @@ export async function getAppointmentsForRange(
   const { data } = await supabase
     .from("appointments")
     .select("*")
-    .eq("user_id", userId)
     .gte("date", startDate)
     .lte("date", endDate);
 
   return (data as Appointment[]) ?? [];
 }
 
-export async function getNextAppointment(
-  userId: string,
-): Promise<AppointmentWithDetails | null> {
+export async function getNextAppointment(): Promise<AppointmentWithDetails | null> {
   const supabase = await createClient();
   const today = new Date().toISOString().split("T")[0];
   const { data } = await supabase
     .from("appointments")
     .select("*, staff:staff_id(name), service:service_id(name, price_transfer)")
-    .eq("user_id", userId)
     .eq("status", "confirmed")
     .gte("date", today)
     .order("date")

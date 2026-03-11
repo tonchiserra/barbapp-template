@@ -1,27 +1,50 @@
 import { createClient } from "@/lib/supabase/server";
 import type { StaffMember, StaffSchedule, StaffTimeOff, StaffBlockedTime } from "@/types";
 
-export async function getStaff(userId: string): Promise<StaffMember[]> {
+export async function getStaff(): Promise<StaffMember[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("staff")
     .select("*")
-    .eq("user_id", userId)
+    .neq("role", "admin")
     .order("sort_order");
 
   return (data as StaffMember[]) ?? [];
 }
 
-export async function getActiveStaff(userId: string): Promise<StaffMember[]> {
+export async function getActiveStaff(): Promise<StaffMember[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("staff")
     .select("*")
-    .eq("user_id", userId)
     .eq("is_active", true)
+    .neq("role", "admin")
     .order("sort_order");
 
   return (data as StaffMember[]) ?? [];
+}
+
+export async function getStaffForBranch(branchId: string): Promise<StaffMember[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("staff")
+    .select("*")
+    .eq("branch_id", branchId)
+    .neq("role", "admin")
+    .order("sort_order");
+
+  return (data as StaffMember[]) ?? [];
+}
+
+export async function getStaffMember(staffId: string): Promise<StaffMember | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("staff")
+    .select("*")
+    .eq("id", staffId)
+    .single();
+
+  return (data as StaffMember) ?? null;
 }
 
 export async function getStaffSchedule(staffId: string): Promise<StaffSchedule[]> {
@@ -35,47 +58,37 @@ export async function getStaffSchedule(staffId: string): Promise<StaffSchedule[]
   return (data as StaffSchedule[]) ?? [];
 }
 
-export async function getAllStaffSchedules(userId: string): Promise<StaffSchedule[]> {
+export async function getAllStaffSchedules(): Promise<StaffSchedule[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("staff_schedules")
-    .select("*, staff!inner(user_id)")
-    .eq("staff.user_id", userId)
+    .select("*")
     .order("day_of_week");
 
-  if (!data) return [];
-
-  return data.map(({ staff: _staff, ...rest }) => rest as StaffSchedule);
+  return (data as StaffSchedule[]) ?? [];
 }
 
-export async function getAllStaffTimeOff(userId: string): Promise<StaffTimeOff[]> {
+export async function getAllStaffTimeOff(): Promise<StaffTimeOff[]> {
   const supabase = await createClient();
   const today = new Date().toISOString().split("T")[0];
   const { data } = await supabase
     .from("staff_time_off")
-    .select("*, staff!inner(user_id)")
-    .eq("staff.user_id", userId)
+    .select("*")
     .gte("date", today)
     .order("date");
 
-  if (!data) return [];
-
-  return data.map(({ staff: _staff, ...rest }) => rest as StaffTimeOff);
+  return (data as StaffTimeOff[]) ?? [];
 }
 
-export async function getAllStaffBlockedTimes(userId: string): Promise<StaffBlockedTime[]> {
+export async function getAllStaffBlockedTimes(): Promise<StaffBlockedTime[]> {
   const supabase = await createClient();
   const today = new Date().toISOString().split("T")[0];
   const { data } = await supabase
     .from("staff_blocked_times")
-    .select("*, staff!inner(user_id)")
-    .eq("staff.user_id", userId)
+    .select("*")
     .gte("date", today)
     .order("date")
     .order("start_time");
 
-  if (!data) return [];
-
-  return data.map(({ staff: _staff, ...rest }) => rest as StaffBlockedTime);
+  return (data as StaffBlockedTime[]) ?? [];
 }
-

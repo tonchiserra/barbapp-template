@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getAuthSession } from "@/lib/auth";
 import type {
   HeaderSettings,
   FooterSettings,
@@ -21,6 +22,16 @@ import type {
   SocialLinks,
 } from "@/types";
 
+/** Update the single site_settings row (or create it if it doesn't exist yet). */
+export async function saveSiteSettingsColumn(data: Record<string, unknown>) {
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("site_settings").select("id").limit(1).single();
+  if (existing) {
+    return supabase.from("site_settings").update(data).eq("id", existing.id);
+  }
+  return supabase.from("site_settings").insert(data);
+}
+
 export interface SaveHeaderState {
   error?: string;
   success?: boolean;
@@ -30,14 +41,11 @@ export async function saveHeaderSettings(
   _prev: SaveHeaderState | null,
   formData: FormData,
 ): Promise<SaveHeaderState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+  if (session.role !== "admin" && session.role !== "owner") return { error: "Sin permisos" };
 
-  if (!user) {
-    return { error: "No autenticado" };
-  }
+  const supabase = await createClient();
 
   const logoType = formData.get("logo_type") as "text" | "image";
   const logoText = (formData.get("logo_text") as string) || "";
@@ -97,9 +105,7 @@ export async function saveHeaderSettings(
     is_visible: isVisible,
   };
 
-  const { error } = await supabase
-    .from("site_settings")
-    .upsert({ user_id: user.id, header }, { onConflict: "user_id" });
+  const { error } = await saveSiteSettingsColumn({ header });
 
   if (error) {
     return { error: "Error al guardar la configuracion. Intenta de nuevo." };
@@ -119,14 +125,11 @@ export async function saveFooterSettings(
   _prev: SaveFooterState | null,
   formData: FormData,
 ): Promise<SaveFooterState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+  if (session.role !== "admin" && session.role !== "owner") return { error: "Sin permisos" };
 
-  if (!user) {
-    return { error: "No autenticado" };
-  }
+  const supabase = await createClient();
 
   const isVisible = formData.get("is_visible") === "on";
 
@@ -172,9 +175,7 @@ export async function saveFooterSettings(
     is_visible: isVisible,
   };
 
-  const { error } = await supabase
-    .from("site_settings")
-    .upsert({ user_id: user.id, footer }, { onConflict: "user_id" });
+  const { error } = await saveSiteSettingsColumn({ footer });
 
   if (error) {
     return { error: "Error al guardar la configuracion. Intenta de nuevo." };
@@ -198,14 +199,11 @@ export async function saveCarouselSettings(
   _prev: SaveCarouselState | null,
   formData: FormData,
 ): Promise<SaveCarouselState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+  if (session.role !== "admin" && session.role !== "owner") return { error: "Sin permisos" };
 
-  if (!user) {
-    return { error: "No autenticado" };
-  }
+  const supabase = await createClient();
 
   const isVisible = formData.get("is_visible") === "on";
   const autoSlide = formData.get("auto_slide") === "on";
@@ -257,9 +255,7 @@ export async function saveCarouselSettings(
     is_visible: isVisible,
   };
 
-  const { error } = await supabase
-    .from("site_settings")
-    .upsert({ user_id: user.id, carousel }, { onConflict: "user_id" });
+  const { error } = await saveSiteSettingsColumn({ carousel });
 
   if (error) {
     return { error: "Error al guardar la configuracion. Intenta de nuevo." };
@@ -279,14 +275,11 @@ export async function saveVideoSettings(
   _prev: SaveVideoState | null,
   formData: FormData,
 ): Promise<SaveVideoState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+  if (session.role !== "admin" && session.role !== "owner") return { error: "Sin permisos" };
 
-  if (!user) {
-    return { error: "No autenticado" };
-  }
+  const supabase = await createClient();
 
   const isVisible = formData.get("is_visible") === "on";
   const title = ((formData.get("title") as string) || "").trim();
@@ -309,9 +302,7 @@ export async function saveVideoSettings(
     is_visible: isVisible,
   };
 
-  const { error } = await supabase
-    .from("site_settings")
-    .upsert({ user_id: user.id, video }, { onConflict: "user_id" });
+  const { error } = await saveSiteSettingsColumn({ video });
 
   if (error) {
     return { error: "Error al guardar la configuracion. Intenta de nuevo." };
@@ -331,14 +322,11 @@ export async function saveGallerySettings(
   _prev: SaveGalleryState | null,
   formData: FormData,
 ): Promise<SaveGalleryState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+  if (session.role !== "admin" && session.role !== "owner") return { error: "Sin permisos" };
 
-  if (!user) {
-    return { error: "No autenticado" };
-  }
+  const supabase = await createClient();
 
   const isVisible = formData.get("is_visible") === "on";
   const title = ((formData.get("title") as string) || "").trim();
@@ -368,9 +356,7 @@ export async function saveGallerySettings(
     is_visible: isVisible,
   };
 
-  const { error } = await supabase
-    .from("site_settings")
-    .upsert({ user_id: user.id, gallery }, { onConflict: "user_id" });
+  const { error } = await saveSiteSettingsColumn({ gallery });
 
   if (error) {
     console.error("saveGallerySettings error:", error);
@@ -391,14 +377,11 @@ export async function saveMulticolumnSettings(
   _prev: SaveMulticolumnState | null,
   formData: FormData,
 ): Promise<SaveMulticolumnState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+  if (session.role !== "admin" && session.role !== "owner") return { error: "Sin permisos" };
 
-  if (!user) {
-    return { error: "No autenticado" };
-  }
+  const supabase = await createClient();
 
   const isVisible = formData.get("is_visible") === "on";
   const title = ((formData.get("title") as string) || "").trim();
@@ -435,9 +418,7 @@ export async function saveMulticolumnSettings(
     is_visible: isVisible,
   };
 
-  const { error } = await supabase
-    .from("site_settings")
-    .upsert({ user_id: user.id, multicolumn }, { onConflict: "user_id" });
+  const { error } = await saveSiteSettingsColumn({ multicolumn });
 
   if (error) {
     console.error("saveMulticolumnSettings error:", error);
@@ -458,14 +439,11 @@ export async function saveMapSettings(
   _prev: SaveMapState | null,
   formData: FormData,
 ): Promise<SaveMapState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+  if (session.role !== "admin" && session.role !== "owner") return { error: "Sin permisos" };
 
-  if (!user) {
-    return { error: "No autenticado" };
-  }
+  const supabase = await createClient();
 
   const isVisible = formData.get("is_visible") === "on";
   const title = ((formData.get("title") as string) || "").trim();
@@ -486,9 +464,7 @@ export async function saveMapSettings(
     is_visible: isVisible,
   };
 
-  const { error } = await supabase
-    .from("site_settings")
-    .upsert({ user_id: user.id, map }, { onConflict: "user_id" });
+  const { error } = await saveSiteSettingsColumn({ map });
 
   if (error) {
     console.error("saveMapSettings error:", error);
@@ -513,12 +489,11 @@ export async function saveThemeSettings(
   _prev: SaveThemeState | null,
   formData: FormData,
 ): Promise<SaveThemeState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+  if (session.role !== "admin" && session.role !== "owner") return { error: "Sin permisos" };
 
-  if (!user) return { error: "No autenticado" };
+  const supabase = await createClient();
 
   const background = ((formData.get("background") as string) || "").trim();
   const foreground = ((formData.get("foreground") as string) || "").trim();
@@ -538,9 +513,7 @@ export async function saveThemeSettings(
 
   const theme: ThemeSettings = { background, foreground, primary, secondary };
 
-  const { error } = await supabase
-    .from("site_settings")
-    .upsert({ user_id: user.id, theme }, { onConflict: "user_id" });
+  const { error } = await saveSiteSettingsColumn({ theme });
 
   if (error) {
     console.error("saveThemeSettings error:", error);
@@ -563,12 +536,11 @@ export async function saveEmailSettings(
   _prev: SaveEmailState | null,
   formData: FormData,
 ): Promise<SaveEmailState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+  if (session.role === "employee") return { error: "Sin permisos" };
 
-  if (!user) return { error: "No autenticado" };
+  const supabase = await createClient();
 
   const subject = ((formData.get("subject") as string) || "").trim();
   const greeting = ((formData.get("greeting") as string) || "").trim();
@@ -580,9 +552,7 @@ export async function saveEmailSettings(
 
   const email: EmailSettings = { subject, greeting, body, farewell };
 
-  const { error } = await supabase
-    .from("site_settings")
-    .upsert({ user_id: user.id, email }, { onConflict: "user_id" });
+  const { error } = await saveSiteSettingsColumn({ email });
 
   if (error) {
     console.error("saveEmailSettings error:", error);

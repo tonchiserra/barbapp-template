@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { sendCompletionEmail } from "@/lib/email";
 import { getEmailSettings } from "@/lib/queries/site-settings";
-import type { AppointmentStatus, PaymentMethod } from "@/types";
-import { DEFAULT_SCHEDULE } from "@/types";
+import { getAuthSession, canAccessStaff } from "@/lib/auth";
+import type { AppointmentStatus, PaymentMethod, ServiceSpecialPrice, Reward, PointRedemption, Product, ProductSaleWithDetails } from "@/types";
 
 export interface ActionState {
   error?: string;
@@ -20,14 +20,13 @@ export async function createService(
   _prev: ActionState | null,
   formData: FormData,
 ): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
 
   const staffId = formData.get("staff_id") as string;
   if (!staffId) return { error: "Empleado faltante" };
+
+  if (!(await canAccessStaff(session, staffId))) return { error: "Sin permisos" };
 
   const name = ((formData.get("name") as string) || "").trim();
   const description = ((formData.get("description") as string) || "").trim();
@@ -39,8 +38,8 @@ export async function createService(
   if (!name) return { error: "El nombre es obligatorio" };
   if (durationMinutes < 5) return { error: "La duracion minima es 5 minutos" };
 
+  const supabase = await createClient();
   const { error } = await supabase.from("services").insert({
-    user_id: user.id,
     staff_id: staffId,
     name,
     description,
@@ -63,11 +62,8 @@ export async function updateService(
   _prev: ActionState | null,
   formData: FormData,
 ): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
 
   const id = formData.get("id") as string;
   if (!id) return { error: "ID de servicio faltante" };
@@ -82,11 +78,11 @@ export async function updateService(
   if (!name) return { error: "El nombre es obligatorio" };
   if (durationMinutes < 5) return { error: "La duracion minima es 5 minutos" };
 
+  const supabase = await createClient();
   const { error } = await supabase
     .from("services")
     .update({ name, description, price_transfer: priceTransfer, price_cash: priceCash, duration_minutes: durationMinutes, is_active: isActive })
-    .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("id", id);
 
   if (error) {
     console.error("updateService error:", error);
@@ -98,17 +94,14 @@ export async function updateService(
 }
 
 export async function deleteService(serviceId: string): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
 
+  const supabase = await createClient();
   const { error } = await supabase
     .from("services")
     .delete()
-    .eq("id", serviceId)
-    .eq("user_id", user.id);
+    .eq("id", serviceId);
 
   if (error) {
     console.error("deleteService error:", error);
@@ -120,108 +113,114 @@ export async function deleteService(serviceId: string): Promise<ActionState> {
 }
 
 // ---------------------------------------------------------------------------
-// Staff
+// Staff (no create/delete — managed directly in Supabase)
 // ---------------------------------------------------------------------------
-
-export async function createStaff(
-  _prev: ActionState | null,
-  formData: FormData,
-): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
-
-  const name = ((formData.get("name") as string) || "").trim();
-  const avatarUrl = ((formData.get("avatar_url") as string) || "").trim();
-  const isOwner = formData.get("is_owner") === "on";
-  const isActive = formData.get("is_active") !== "off";
-
-  if (!name) return { error: "El nombre es obligatorio" };
-
-  const { data: staffRow, error } = await supabase
-    .from("staff")
-    .insert({ user_id: user.id, name, avatar_url: avatarUrl, is_owner: isOwner, is_active: isActive })
-    .select("id")
-    .single();
-
-  if (error || !staffRow) {
-    console.error("createStaff error:", error);
-    return { error: "Error al crear el empleado" };
-  }
-
-  // Insert default schedule (7 days)
-  const scheduleRows = DEFAULT_SCHEDULE.map((s) => ({
-    staff_id: staffRow.id,
-    ...s,
-  }));
-
-  const { error: schedError } = await supabase.from("staff_schedules").insert(scheduleRows);
-  if (schedError) {
-    console.error("createStaff schedule error:", schedError);
-  }
-
-  revalidatePath("/admin");
-  return { success: true };
-}
 
 export async function updateStaff(
   _prev: ActionState | null,
   formData: FormData,
 ): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
 
   const id = formData.get("id") as string;
   if (!id) return { error: "ID de empleado faltante" };
 
+  if (!(await canAccessStaff(session, id))) return { error: "Sin permisos" };
+
   const name = ((formData.get("name") as string) || "").trim();
   const avatarUrl = ((formData.get("avatar_url") as string) || "").trim();
   const branchId = ((formData.get("branch_id") as string) || "").trim() || null;
-  const isOwner = formData.get("is_owner") === "on";
   const isActive = formData.get("is_active") === "on";
 
   if (!name) return { error: "El nombre es obligatorio" };
 
+  const supabase = await createClient();
+
+  const commissionRaw = parseInt(formData.get("commission_percent") as string);
+  const commissionPercent = Number.isNaN(commissionRaw) ? undefined : Math.min(100, Math.max(0, commissionRaw));
+
+  // Agenda fields (all roles can set their own)
+  const agendaStart = ((formData.get("agenda_start_date") as string) || "").trim() || null;
+  const agendaEnd = ((formData.get("agenda_end_date") as string) || "").trim() || null;
+  const minAdvanceRaw = parseInt(formData.get("min_advance_hours") as string);
+  const minAdvanceHours = Number.isNaN(minAdvanceRaw) ? 2 : Math.min(72, Math.max(0, minAdvanceRaw));
+
+  const agendaFields = {
+    agenda_start_date: agendaStart,
+    agenda_end_date: agendaEnd,
+    min_advance_hours: minAdvanceHours,
+  };
+
+  // Employees can only update name, avatar, and agenda
+  const updateData: Record<string, unknown> = session.role === "employee"
+    ? { name, avatar_url: avatarUrl, ...agendaFields }
+    : { name, avatar_url: avatarUrl, branch_id: branchId, is_active: isActive, ...(commissionPercent !== undefined && { commission_percent: commissionPercent }), ...agendaFields };
+
   const { error } = await supabase
     .from("staff")
-    .update({ name, avatar_url: avatarUrl, branch_id: branchId, is_owner: isOwner, is_active: isActive })
-    .eq("id", id)
-    .eq("user_id", user.id);
+    .update(updateData)
+    .eq("id", id);
 
   if (error) {
     console.error("updateStaff error:", error);
-    return { error: "Error al actualizar el empleado" };
+    return { error: `Error: ${error.message}` };
   }
 
   revalidatePath("/admin");
   return { success: true };
 }
 
-export async function deleteStaff(staffId: string): Promise<ActionState> {
+// ---------------------------------------------------------------------------
+// Staff Earnings
+// ---------------------------------------------------------------------------
+
+export interface StaffEarningsPeriod {
+  count: number;
+  revenue: number;
+}
+
+export async function getStaffEarnings(
+  staffId: string,
+): Promise<{ today: StaffEarningsPeriod; week: StaffEarningsPeriod; month: StaffEarningsPeriod } | null> {
+  const session = await getAuthSession();
+  if (!session) return null;
+  if (!(await canAccessStaff(session, staffId))) return null;
+
+  const now = new Date();
+  const todayStr = now.toISOString().split("T")[0];
+
+  // Month start
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+
+  // Week start (Monday)
+  const dayOfWeek = now.getDay();
+  const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - diffToMonday);
+  const weekStart = monday.toISOString().split("T")[0];
+
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const { data } = await supabase
+    .from("appointments")
+    .select("date, price")
+    .eq("staff_id", staffId)
+    .eq("status", "completed")
+    .gte("date", monthStart)
+    .lte("date", todayStr);
 
-  const { error } = await supabase
-    .from("staff")
-    .delete()
-    .eq("id", staffId)
-    .eq("user_id", user.id);
+  const rows = data ?? [];
 
-  if (error) {
-    console.error("deleteStaff error:", error);
-    return { error: "Error al eliminar el empleado" };
-  }
+  const aggregate = (filtered: typeof rows) => ({
+    count: filtered.length,
+    revenue: filtered.reduce((sum, r) => sum + Number(r.price), 0),
+  });
 
-  revalidatePath("/admin");
-  return { success: true };
+  return {
+    today: aggregate(rows.filter((r) => r.date === todayStr)),
+    week: aggregate(rows.filter((r) => r.date >= weekStart)),
+    month: aggregate(rows),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -232,21 +231,12 @@ export async function updateStaffSchedule(
   staffId: string,
   schedules: { day_of_week: number; start_time: string; end_time: string; is_working: boolean }[],
 ): Promise<ActionState> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  if (!(await canAccessStaff(session, staffId))) return { error: "Sin permisos" };
+
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
-
-  // Verify staff belongs to user
-  const { data: staff } = await supabase
-    .from("staff")
-    .select("id")
-    .eq("id", staffId)
-    .eq("user_id", user.id)
-    .single();
-
-  if (!staff) return { error: "Empleado no encontrado" };
 
   // Delete all existing schedules and re-insert (supports multiple ranges per day)
   const { error: delError } = await supabase
@@ -289,12 +279,12 @@ export async function addStaffTimeOff(
   date: string,
   reason: string,
 ): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
 
+  if (!(await canAccessStaff(session, staffId))) return { error: "Sin permisos" };
+
+  const supabase = await createClient();
   const { error } = await supabase.from("staff_time_off").insert({
     staff_id: staffId,
     date,
@@ -311,12 +301,10 @@ export async function addStaffTimeOff(
 }
 
 export async function removeStaffTimeOff(timeOffId: string): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
 
+  const supabase = await createClient();
   const { error } = await supabase.from("staff_time_off").delete().eq("id", timeOffId);
 
   if (error) {
@@ -339,14 +327,14 @@ export async function addStaffBlockedTime(
   endTime: string,
   reason: string,
 ): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  if (!(await canAccessStaff(session, staffId))) return { error: "Sin permisos" };
 
   if (startTime >= endTime) return { error: "La hora de inicio debe ser menor a la de fin" };
 
+  const supabase = await createClient();
   const { error } = await supabase.from("staff_blocked_times").insert({
     staff_id: staffId,
     date,
@@ -365,12 +353,10 @@ export async function addStaffBlockedTime(
 }
 
 export async function removeStaffBlockedTime(blockedTimeId: string): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
 
+  const supabase = await createClient();
   const { error } = await supabase.from("staff_blocked_times").delete().eq("id", blockedTimeId);
 
   if (error) {
@@ -390,23 +376,20 @@ export async function saveBookingSettings(
   _prev: ActionState | null,
   formData: FormData,
 ): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
 
   const title = ((formData.get("title") as string) || "").trim();
   const description = ((formData.get("description") as string) || "").trim();
-  const advanceDays = parseInt((formData.get("advance_days") as string) || "30", 10) || 30;
-  const minAdvanceHours = parseInt((formData.get("min_advance_hours") as string) || "2", 10) || 2;
   const isVisible = formData.get("is_visible") === "on";
 
-  const booking = { title, description, advance_days: advanceDays, min_advance_hours: minAdvanceHours, is_visible: isVisible };
+  const booking = { title, description, is_visible: isVisible };
 
-  const { error } = await supabase
-    .from("site_settings")
-    .upsert({ user_id: user.id, booking }, { onConflict: "user_id" });
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("site_settings").select("id").limit(1).single();
+  const { error } = existing
+    ? await supabase.from("site_settings").update({ booking }).eq("id", existing.id)
+    : await supabase.from("site_settings").insert({ booking });
 
   if (error) {
     console.error("saveBookingSettings error:", error);
@@ -426,14 +409,23 @@ export async function updateAppointmentStatus(
   status: AppointmentStatus,
   paymentMethod?: PaymentMethod,
 ): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
 
   const validStatuses: AppointmentStatus[] = ["confirmed", "completed", "cancelled", "no_show"];
   if (!validStatuses.includes(status)) return { error: "Estado invalido" };
+
+  const supabase = await createClient();
+
+  // Employees can only manage their own appointments
+  if (session.role === "employee") {
+    const { data: apt } = await supabase
+      .from("appointments")
+      .select("staff_id")
+      .eq("id", appointmentId)
+      .single();
+    if (!apt || apt.staff_id !== session.userId) return { error: "Sin permisos" };
+  }
 
   // Build update payload
   const updateData: Record<string, unknown> = { status };
@@ -443,10 +435,9 @@ export async function updateAppointmentStatus(
     updateData.payment_method = paymentMethod;
 
     if (paymentMethod === "transfer") {
-      // Get the appointment's service to recalculate with transfer price
       const { data: apt } = await supabase
         .from("appointments")
-        .select("service_id, staff_id, discount_percent")
+        .select("service_id, staff_id, date, discount_percent")
         .eq("id", appointmentId)
         .single();
 
@@ -459,9 +450,18 @@ export async function updateAppointmentStatus(
           .single();
 
         if (svc) {
+          // Check for special price on appointment date
+          const { data: specialRow } = await supabase
+            .from("service_special_prices")
+            .select("price_transfer")
+            .eq("service_id", apt.service_id)
+            .eq("date", apt.date)
+            .maybeSingle();
+
+          const transferPrice = specialRow?.price_transfer ?? svc.price_transfer;
           const discountMult = apt.discount_percent > 0 ? (1 - apt.discount_percent / 100) : 1;
-          updateData.price = Math.round(svc.price_transfer * discountMult * 100) / 100;
-          updateData.original_price = apt.discount_percent > 0 ? svc.price_transfer : null;
+          updateData.price = Math.round(transferPrice * discountMult * 100) / 100;
+          updateData.original_price = apt.discount_percent > 0 ? transferPrice : null;
         }
       }
     }
@@ -470,8 +470,7 @@ export async function updateAppointmentStatus(
   const { error } = await supabase
     .from("appointments")
     .update(updateData)
-    .eq("id", appointmentId)
-    .eq("user_id", user.id);
+    .eq("id", appointmentId);
 
   if (error) {
     console.error("updateAppointmentStatus error:", error);
@@ -488,7 +487,6 @@ export async function updateAppointmentStatus(
   // Update client counters on status change (fire-and-forget)
   if (apt && (status === "completed" || status === "cancelled" || status === "no_show")) {
     supabase.rpc("update_client_on_status_change", {
-      p_user_id: user.id,
       p_phone: apt.client_phone ?? "",
       p_email: apt.client_email ?? "",
     }).then(({ error: clientError }) => {
@@ -496,12 +494,32 @@ export async function updateAppointmentStatus(
     });
   }
 
+  // Add loyalty points on completion (fire-and-forget)
+  if (status === "completed" && apt) {
+    // Get the final price from the updated appointment
+    const { data: finalApt } = await supabase
+      .from("appointments")
+      .select("price")
+      .eq("id", appointmentId)
+      .single();
+
+    if (finalApt) {
+      supabase.rpc("add_client_points", {
+        p_phone: apt.client_phone ?? "",
+        p_email: apt.client_email ?? "",
+        p_price: finalApt.price,
+      }).then(({ error: pointsError }) => {
+        if (pointsError) console.error("add_client_points error:", pointsError);
+      });
+    }
+  }
+
   // Send completion email (fire-and-forget)
   if (status === "completed" && apt?.client_email) {
     const [{ data: svc }, { data: staff }, emailSettings] = await Promise.all([
       supabase.from("services").select("name").eq("id", apt.service_id).single(),
       supabase.from("staff").select("name").eq("id", apt.staff_id).single(),
-      getEmailSettings(user.id),
+      getEmailSettings(),
     ]);
 
     sendCompletionEmail({
@@ -513,6 +531,108 @@ export async function updateAppointmentStatus(
       startTime: apt.start_time,
       emailSettings,
     }).catch((err) => console.error("Completion email error:", err));
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Reschedule appointment (change service, date, time)
+// ---------------------------------------------------------------------------
+
+export async function rescheduleAppointment(
+  appointmentId: string,
+  serviceId: string,
+  date: string,
+  startTime: string,
+): Promise<ActionState> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  const supabase = await createClient();
+
+  // Fetch existing appointment
+  const { data: existing } = await supabase
+    .from("appointments")
+    .select("staff_id, status, discount_percent, discount_code_id")
+    .eq("id", appointmentId)
+    .single();
+
+  if (!existing) return { error: "Turno no encontrado" };
+  if (existing.status !== "confirmed") return { error: "Solo se pueden modificar turnos confirmados" };
+
+  // Permission: employee can only edit own appointments
+  if (session.role === "employee" && existing.staff_id !== session.userId) {
+    return { error: "Sin permisos" };
+  }
+
+  // Get service for duration and price
+  const { data: serviceRow } = await supabase
+    .from("services")
+    .select("price_cash, duration_minutes")
+    .eq("id", serviceId)
+    .eq("staff_id", existing.staff_id)
+    .single();
+
+  if (!serviceRow) return { error: "Servicio no encontrado" };
+
+  // Check special price
+  const { data: specialRow } = await supabase
+    .from("service_special_prices")
+    .select("price_cash")
+    .eq("service_id", serviceId)
+    .eq("date", date)
+    .maybeSingle();
+
+  let price = specialRow?.price_cash ?? serviceRow.price_cash;
+
+  // Re-apply existing discount if any
+  let originalPrice: number | null = null;
+  if (existing.discount_percent > 0) {
+    originalPrice = price;
+    price = Math.round(price * (1 - existing.discount_percent / 100) * 100) / 100;
+  }
+
+  // Calculate end_time
+  const [hours, minutes] = startTime.split(":").map(Number);
+  const startMinutes = hours * 60 + minutes;
+  const endMinutes = startMinutes + serviceRow.duration_minutes;
+  const endHours = Math.floor(endMinutes / 60);
+  const endMins = endMinutes % 60;
+  const endTime = `${String(endHours).padStart(2, "0")}:${String(endMins).padStart(2, "0")}:00`;
+
+  // Check for conflicts (exclude current appointment)
+  const { data: conflicts } = await supabase
+    .from("appointments")
+    .select("id")
+    .eq("staff_id", existing.staff_id)
+    .eq("date", date)
+    .in("status", ["confirmed", "completed"])
+    .neq("id", appointmentId)
+    .lt("start_time", endTime)
+    .gt("end_time", startTime)
+    .limit(1);
+
+  if (conflicts && conflicts.length > 0) {
+    return { error: "Este horario ya no esta disponible" };
+  }
+
+  const { error } = await supabase
+    .from("appointments")
+    .update({
+      service_id: serviceId,
+      date,
+      start_time: startTime,
+      end_time: endTime,
+      price,
+      original_price: originalPrice,
+    })
+    .eq("id", appointmentId);
+
+  if (error) {
+    console.error("rescheduleAppointment error:", error);
+    return { error: "Error al modificar el turno" };
   }
 
   revalidatePath("/admin");
@@ -597,10 +717,10 @@ export async function createAppointment(
     return { error: "Faltan datos obligatorios" };
   }
 
-  // Get staff to derive user_id (never trust client)
+  // Verify staff exists
   const { data: staffRow } = await supabase
     .from("staff")
-    .select("user_id")
+    .select("id")
     .eq("id", staffId)
     .single();
 
@@ -616,7 +736,15 @@ export async function createAppointment(
 
   if (!serviceRow) return { error: "Servicio no encontrado" };
 
-  let price = serviceRow.price_cash;
+  // Check for special price on this date
+  const { data: specialRow } = await supabase
+    .from("service_special_prices")
+    .select("price_cash, price_transfer")
+    .eq("service_id", serviceId)
+    .eq("date", date)
+    .maybeSingle();
+
+  let price = specialRow?.price_cash ?? serviceRow.price_cash;
   const duration = serviceRow.duration_minutes;
 
   // Calculate end_time
@@ -651,7 +779,7 @@ export async function createAppointment(
   if (discountCodeRaw) {
     const { data: dcData, error: dcError } = await supabase.rpc(
       "use_discount_code",
-      { p_code: discountCodeRaw, p_user_id: staffRow.user_id },
+      { p_code: discountCodeRaw },
     );
 
     if (dcError) {
@@ -674,7 +802,6 @@ export async function createAppointment(
   const { data: appointment, error } = await supabase
     .from("appointments")
     .insert({
-      user_id: staffRow.user_id,
       staff_id: staffId,
       service_id: serviceId,
       client_name: clientName,
@@ -700,7 +827,6 @@ export async function createAppointment(
   // Upsert client record (fire-and-forget, don't block the response)
   const dayOfWeek = new Date(date + "T00:00:00").getDay();
   supabase.rpc("upsert_client", {
-    p_user_id: staffRow.user_id,
     p_name: clientName,
     p_phone: clientPhone,
     p_email: clientEmail,
@@ -733,19 +859,16 @@ export async function getClientsAction(
   page: number = 1,
   pageSize: number = 20,
 ): Promise<{ clients: import("@/types").ClientWithDetails[]; total: number }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { clients: [], total: 0 };
+  const session = await getAuthSession();
+  if (!session) return { clients: [], total: 0 };
 
+  const supabase = await createClient();
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
   const { data, count } = await supabase
     .from("clients")
     .select(CLIENT_SELECT, { count: "exact" })
-    .eq("user_id", user.id)
     .order("total_appointments", { ascending: false })
     .range(from, to);
 
@@ -756,16 +879,13 @@ export async function getClientsAction(
 }
 
 export async function getAllClientsAction(): Promise<import("@/types").ClientWithDetails[]> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return [];
+  const session = await getAuthSession();
+  if (!session) return [];
 
+  const supabase = await createClient();
   const { data } = await supabase
     .from("clients")
     .select(CLIENT_SELECT)
-    .eq("user_id", user.id)
     .order("total_appointments", { ascending: false });
 
   return (data ?? []).map(mapClientDetails);
@@ -779,11 +899,11 @@ export async function createDiscountCode(
   _prev: ActionState | null,
   formData: FormData,
 ): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  // admin/owner/manager can manage discount codes
+  if (session.role === "employee") return { error: "Sin permisos" };
 
   const code = ((formData.get("code") as string) || "").trim().toUpperCase();
   const discountPercent =
@@ -797,8 +917,8 @@ export async function createDiscountCode(
     return { error: "El porcentaje debe ser entre 1 y 100" };
   if (maxUses < 1) return { error: "La cantidad minima es 1" };
 
+  const supabase = await createClient();
   const { error } = await supabase.from("discount_codes").insert({
-    user_id: user.id,
     code,
     discount_percent: discountPercent,
     max_uses: maxUses,
@@ -820,11 +940,10 @@ export async function updateDiscountCode(
   _prev: ActionState | null,
   formData: FormData,
 ): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  if (session.role === "employee") return { error: "Sin permisos" };
 
   const id = formData.get("id") as string;
   if (!id) return { error: "ID de cupon faltante" };
@@ -841,6 +960,7 @@ export async function updateDiscountCode(
     return { error: "El porcentaje debe ser entre 1 y 100" };
   if (maxUses < 1) return { error: "La cantidad minima es 1" };
 
+  const supabase = await createClient();
   const { error } = await supabase
     .from("discount_codes")
     .update({
@@ -849,8 +969,7 @@ export async function updateDiscountCode(
       max_uses: maxUses,
       is_active: isActive,
     })
-    .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("id", id);
 
   if (error) {
     if (error.code === "23505")
@@ -866,17 +985,16 @@ export async function updateDiscountCode(
 export async function deleteDiscountCode(
   discountCodeId: string,
 ): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
 
+  if (session.role === "employee") return { error: "Sin permisos" };
+
+  const supabase = await createClient();
   const { error } = await supabase
     .from("discount_codes")
     .delete()
-    .eq("id", discountCodeId)
-    .eq("user_id", user.id);
+    .eq("id", discountCodeId);
 
   if (error) {
     console.error("deleteDiscountCode error:", error);
@@ -889,7 +1007,6 @@ export async function deleteDiscountCode(
 
 export async function validateDiscountCodeAction(
   code: string,
-  userId: string,
 ): Promise<{
   valid: boolean;
   discount_code_id?: string;
@@ -900,7 +1017,6 @@ export async function validateDiscountCodeAction(
   const { data } = await supabase
     .from("discount_codes")
     .select("id, discount_percent")
-    .eq("user_id", userId)
     .ilike("code", code)
     .eq("is_active", true)
     .limit(1)
@@ -910,7 +1026,6 @@ export async function validateDiscountCodeAction(
     return { valid: false, error: "Cupon invalido o agotado" };
   }
 
-  // Check usage separately to give better error message
   const { data: full } = await supabase
     .from("discount_codes")
     .select("used_count, max_uses")
@@ -936,11 +1051,10 @@ export async function createBranch(
   _prev: ActionState | null,
   formData: FormData,
 ): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  if (session.role !== "admin" && session.role !== "owner") return { error: "Sin permisos" };
 
   const name = ((formData.get("name") as string) || "").trim();
   const address = ((formData.get("address") as string) || "").trim();
@@ -948,8 +1062,8 @@ export async function createBranch(
 
   if (!name) return { error: "El nombre es obligatorio" };
 
+  const supabase = await createClient();
   const { error } = await supabase.from("branches").insert({
-    user_id: user.id,
     name,
     address,
     is_active: isActive,
@@ -968,11 +1082,10 @@ export async function updateBranch(
   _prev: ActionState | null,
   formData: FormData,
 ): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  if (session.role !== "admin" && session.role !== "owner") return { error: "Sin permisos" };
 
   const id = formData.get("id") as string;
   if (!id) return { error: "ID de sucursal faltante" };
@@ -983,11 +1096,11 @@ export async function updateBranch(
 
   if (!name) return { error: "El nombre es obligatorio" };
 
+  const supabase = await createClient();
   const { error } = await supabase
     .from("branches")
     .update({ name, address, is_active: isActive })
-    .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("id", id);
 
   if (error) {
     console.error("updateBranch error:", error);
@@ -999,17 +1112,16 @@ export async function updateBranch(
 }
 
 export async function deleteBranch(branchId: string): Promise<ActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
 
+  if (session.role !== "admin" && session.role !== "owner") return { error: "Sin permisos" };
+
+  const supabase = await createClient();
   const { error } = await supabase
     .from("branches")
     .delete()
-    .eq("id", branchId)
-    .eq("user_id", user.id);
+    .eq("id", branchId);
 
   if (error) {
     console.error("deleteBranch error:", error);
@@ -1020,10 +1132,490 @@ export async function deleteBranch(branchId: string): Promise<ActionState> {
   return { success: true };
 }
 
-// Public: get active branches for a user
-export async function getActiveBranchesAction(
-  userId: string,
-): Promise<import("@/types").Branch[]> {
+// Public: get active branches
+export async function getActiveBranchesAction(): Promise<import("@/types").Branch[]> {
   const { getActiveBranches } = await import("@/lib/queries/branches");
-  return getActiveBranches(userId);
+  return getActiveBranches();
 }
+
+// ---------------------------------------------------------------------------
+// Service Special Prices
+// ---------------------------------------------------------------------------
+
+export async function getSpecialPricesForService(
+  serviceId: string,
+): Promise<ServiceSpecialPrice[]> {
+  const session = await getAuthSession();
+  if (!session) return [];
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("service_special_prices")
+    .select("*")
+    .eq("service_id", serviceId)
+    .order("date", { ascending: true });
+
+  return (data ?? []) as ServiceSpecialPrice[];
+}
+
+export async function addServiceSpecialPrice(
+  serviceId: string,
+  date: string,
+  priceCash: number,
+  priceTransfer: number,
+): Promise<ActionState> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  if (!serviceId || !date || priceCash < 0 || priceTransfer < 0) {
+    return { error: "Datos invalidos" };
+  }
+
+  const supabase = await createClient();
+
+  // Delete existing entry for this date first
+  const { error: delError } = await supabase
+    .from("service_special_prices")
+    .delete()
+    .eq("service_id", serviceId)
+    .eq("date", date);
+
+  if (delError) {
+    console.error("deleteBeforeInsert error:", delError);
+  }
+
+  const { error } = await supabase
+    .from("service_special_prices")
+    .insert({
+      service_id: serviceId,
+      date,
+      price_cash: priceCash,
+      price_transfer: priceTransfer,
+    });
+
+  if (error) {
+    console.error("addServiceSpecialPrice error:", error);
+    return { error: `Error: ${error.message}` };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function removeServiceSpecialPrice(
+  specialPriceId: string,
+): Promise<ActionState> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("service_special_prices")
+    .delete()
+    .eq("id", specialPriceId);
+
+  if (error) {
+    console.error("removeServiceSpecialPrice error:", error);
+    return { error: "Error al eliminar el precio especial" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Rewards CRUD
+// ---------------------------------------------------------------------------
+
+export async function createReward(
+  _prev: ActionState | null,
+  formData: FormData,
+): Promise<ActionState> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+  if (session.role === "employee") return { error: "Sin permisos" };
+
+  const name = ((formData.get("name") as string) || "").trim();
+  const description = ((formData.get("description") as string) || "").trim();
+  const pointsCost = parseInt((formData.get("points_cost") as string) || "0", 10);
+  const type = (formData.get("type") as string) || "product";
+  const discountPercentRaw = parseInt((formData.get("discount_percent") as string) || "0", 10);
+  const discountPercent = type === "discount" ? discountPercentRaw : null;
+  const isActive = formData.get("is_active") === "on";
+
+  if (!name) return { error: "El nombre es obligatorio" };
+  if (pointsCost < 1) return { error: "El costo en puntos debe ser mayor a 0" };
+  if (type === "discount" && (!discountPercent || discountPercent < 1 || discountPercent > 100)) {
+    return { error: "El porcentaje de descuento debe ser entre 1 y 100" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("rewards").insert({
+    name,
+    description,
+    points_cost: pointsCost,
+    type,
+    discount_percent: discountPercent,
+    is_active: isActive,
+  });
+
+  if (error) {
+    console.error("createReward error:", error);
+    return { error: "Error al crear la recompensa" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function updateReward(
+  _prev: ActionState | null,
+  formData: FormData,
+): Promise<ActionState> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+  if (session.role === "employee") return { error: "Sin permisos" };
+
+  const id = formData.get("id") as string;
+  if (!id) return { error: "ID de recompensa faltante" };
+
+  const name = ((formData.get("name") as string) || "").trim();
+  const description = ((formData.get("description") as string) || "").trim();
+  const pointsCost = parseInt((formData.get("points_cost") as string) || "0", 10);
+  const type = (formData.get("type") as string) || "product";
+  const discountPercentRaw = parseInt((formData.get("discount_percent") as string) || "0", 10);
+  const discountPercent = type === "discount" ? discountPercentRaw : null;
+  const isActive = formData.get("is_active") === "on";
+
+  if (!name) return { error: "El nombre es obligatorio" };
+  if (pointsCost < 1) return { error: "El costo en puntos debe ser mayor a 0" };
+  if (type === "discount" && (!discountPercent || discountPercent < 1 || discountPercent > 100)) {
+    return { error: "El porcentaje de descuento debe ser entre 1 y 100" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("rewards")
+    .update({ name, description, points_cost: pointsCost, type, discount_percent: discountPercent, is_active: isActive })
+    .eq("id", id);
+
+  if (error) {
+    console.error("updateReward error:", error);
+    return { error: "Error al actualizar la recompensa" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function deleteReward(rewardId: string): Promise<ActionState> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+  if (session.role === "employee") return { error: "Sin permisos" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("rewards").delete().eq("id", rewardId);
+
+  if (error) {
+    console.error("deleteReward error:", error);
+    return { error: "Error al eliminar la recompensa" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Redeem Points
+// ---------------------------------------------------------------------------
+
+export async function redeemPoints(
+  clientId: string,
+  rewardId: string,
+): Promise<ActionState & { redemptionId?: string }> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("redeem_points", {
+    p_client_id: clientId,
+    p_reward_id: rewardId,
+    p_staff_id: session.userId,
+  });
+
+  if (error) {
+    const msg = error.message.includes("INSUFFICIENT_POINTS")
+      ? "El cliente no tiene suficientes puntos"
+      : error.message.includes("REWARD_NOT_FOUND")
+        ? "Recompensa no encontrada"
+        : `Error: ${error.message}`;
+    return { error: msg };
+  }
+
+  revalidatePath("/admin");
+  return { success: true, redemptionId: data as string };
+}
+
+export async function getClientRedemptions(
+  clientId: string,
+): Promise<PointRedemption[]> {
+  const session = await getAuthSession();
+  if (!session) return [];
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("point_redemptions")
+    .select("*")
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  return (data ?? []) as PointRedemption[];
+}
+
+// ---------------------------------------------------------------------------
+// Ranking Settings
+// ---------------------------------------------------------------------------
+
+export async function saveRankingSettings(
+  _prev: ActionState | null,
+  formData: FormData,
+): Promise<ActionState> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  const title = ((formData.get("title") as string) || "").trim();
+  const description = ((formData.get("description") as string) || "").trim();
+  const isVisible = formData.get("is_visible") === "on";
+
+  const ranking = { title, description, is_visible: isVisible };
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("site_settings").select("id").limit(1).single();
+  const { error } = existing
+    ? await supabase.from("site_settings").update({ ranking }).eq("id", existing.id)
+    : await supabase.from("site_settings").insert({ ranking });
+
+  if (error) {
+    console.error("saveRankingSettings error:", error);
+    return { error: "Error al guardar la configuracion" };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/");
+  return { success: true };
+}
+
+// Public: get special price for a service on a specific date
+export async function getSpecialPriceAction(
+  serviceId: string,
+  date: string,
+): Promise<{ price_cash: number; price_transfer: number } | null> {
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("service_special_prices")
+    .select("price_cash, price_transfer")
+    .eq("service_id", serviceId)
+    .eq("date", date)
+    .maybeSingle();
+
+  return data as { price_cash: number; price_transfer: number } | null;
+}
+
+// ---------------------------------------------------------------------------
+// Products
+// ---------------------------------------------------------------------------
+
+export async function getProducts(): Promise<Product[]> {
+  const session = await getAuthSession();
+  if (!session) return [];
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("products")
+    .select("*")
+    .order("sort_order", { ascending: true });
+
+  return (data ?? []) as Product[];
+}
+
+export async function createProduct(
+  _prev: ActionState | null,
+  formData: FormData,
+): Promise<ActionState> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  const name = ((formData.get("name") as string) || "").trim();
+  const price = parseFloat((formData.get("price") as string) || "0") || 0;
+  const imageUrl = ((formData.get("image_url") as string) || "").trim();
+  const isActive = formData.get("is_active") === "on";
+
+  if (!name) return { error: "El nombre es obligatorio" };
+  if (price < 0) return { error: "El precio no puede ser negativo" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("products").insert({
+    name,
+    price,
+    image_url: imageUrl,
+    is_active: isActive,
+  });
+
+  if (error) {
+    console.error("createProduct error:", error);
+    return { error: "Error al crear el producto" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function updateProduct(
+  _prev: ActionState | null,
+  formData: FormData,
+): Promise<ActionState> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  const id = formData.get("id") as string;
+  if (!id) return { error: "ID de producto faltante" };
+
+  const name = ((formData.get("name") as string) || "").trim();
+  const price = parseFloat((formData.get("price") as string) || "0") || 0;
+  const imageUrl = ((formData.get("image_url") as string) || "").trim();
+  const isActive = formData.get("is_active") === "on";
+
+  if (!name) return { error: "El nombre es obligatorio" };
+  if (price < 0) return { error: "El precio no puede ser negativo" };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("products")
+    .update({ name, price, image_url: imageUrl, is_active: isActive })
+    .eq("id", id);
+
+  if (error) {
+    console.error("updateProduct error:", error);
+    return { error: "Error al actualizar el producto" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function deleteProduct(productId: string): Promise<ActionState> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  // Only admin/owner/manager can delete products
+  if (session.role === "employee") return { error: "Sin permisos" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("products").delete().eq("id", productId);
+
+  if (error) {
+    console.error("deleteProduct error:", error);
+    return { error: "Error al eliminar el producto" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Product Sales
+// ---------------------------------------------------------------------------
+
+export async function recordProductSale(
+  productId: string,
+  quantity: number,
+): Promise<ActionState> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  if (quantity < 1) return { error: "La cantidad debe ser al menos 1" };
+
+  const supabase = await createClient();
+
+  // Get product price
+  const { data: product } = await supabase
+    .from("products")
+    .select("price, is_active")
+    .eq("id", productId)
+    .single();
+
+  if (!product) return { error: "Producto no encontrado" };
+  if (!product.is_active) return { error: "Este producto esta inactivo" };
+
+  const { error } = await supabase.from("product_sales").insert({
+    product_id: productId,
+    staff_id: session.userId,
+    price: product.price,
+    quantity,
+  });
+
+  if (error) {
+    console.error("recordProductSale error:", error);
+    return { error: "Error al registrar la venta" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function getProductSales(
+  page: number = 1,
+  pageSize: number = 20,
+): Promise<{ sales: ProductSaleWithDetails[]; total: number }> {
+  const session = await getAuthSession();
+  if (!session) return { sales: [], total: 0 };
+
+  const supabase = await createClient();
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const { data, count } = await supabase
+    .from("product_sales")
+    .select("*, product:product_id(name), staff:staff_id(name)", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  const sales = (data ?? []).map((row: Record<string, unknown>) => ({
+    ...row,
+    product_name: (row.product as { name: string } | null)?.name ?? "Producto eliminado",
+    staff_name: (row.staff as { name: string } | null)?.name ?? "Empleado",
+  })) as ProductSaleWithDetails[];
+
+  return { sales, total: count ?? 0 };
+}
+
+export async function deleteProductSale(saleId: string): Promise<ActionState> {
+  const session = await getAuthSession();
+  if (!session) return { error: "No autenticado" };
+
+  const supabase = await createClient();
+
+  // Employees can only delete their own sales
+  if (session.role === "employee") {
+    const { data: sale } = await supabase
+      .from("product_sales")
+      .select("staff_id")
+      .eq("id", saleId)
+      .single();
+    if (!sale || sale.staff_id !== session.userId) return { error: "Sin permisos" };
+  }
+
+  const { error } = await supabase.from("product_sales").delete().eq("id", saleId);
+
+  if (error) {
+    console.error("deleteProductSale error:", error);
+    return { error: "Error al eliminar la venta" };
+  }
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+

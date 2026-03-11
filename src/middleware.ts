@@ -4,7 +4,8 @@ import { updateSession } from "@/lib/supabase/middleware";
 export async function middleware(request: NextRequest) {
   const { supabaseResponse, user } = await updateSession(request);
 
-  if (!user && request.nextUrl.pathname.startsWith("/admin")) {
+  const isProtected = request.nextUrl.pathname.startsWith("/admin") || request.nextUrl.pathname.startsWith("/onboarding");
+  if (!user && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

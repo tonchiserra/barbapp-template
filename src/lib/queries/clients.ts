@@ -4,7 +4,6 @@ import type { ClientWithDetails } from "@/types";
 const CLIENT_SELECT = `*, top_service:top_service_id(name), top_staff:top_staff_id(name), top_branch:top_branch_id(name)`;
 
 export async function getClients(
-  userId: string,
   page: number = 1,
   pageSize: number = 20,
 ): Promise<{ clients: ClientWithDetails[]; total: number }> {
@@ -15,7 +14,6 @@ export async function getClients(
   const { data, count } = await supabase
     .from("clients")
     .select(CLIENT_SELECT, { count: "exact" })
-    .eq("user_id", userId)
     .order("total_appointments", { ascending: false })
     .range(from, to);
 

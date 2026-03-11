@@ -1,17 +1,11 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireScope } from "@/lib/auth";
 import { getHeaderSettings } from "@/lib/queries/site-settings";
 import { HeaderSettingsForm } from "../sections/header-settings";
 
 export default async function HeaderPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await requireScope('landing:header');
 
-  if (!user) redirect("/login");
+  const headerSettings = await getHeaderSettings();
 
-  const headerSettings = await getHeaderSettings(user.id);
-
-  return <HeaderSettingsForm userId={user.id} initialSettings={headerSettings} />;
+  return <HeaderSettingsForm userId={session.userId} initialSettings={headerSettings} />;
 }
