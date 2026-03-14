@@ -20,6 +20,7 @@ export type Scope =
   | "turnero:cupones"
   | "turnero:email"
   | "turnero:puntos"
+  | "turnero:agenda"
   | "turnero:productos";
 
 const ALL_SCOPES: readonly Scope[] = [
@@ -39,6 +40,7 @@ const ALL_SCOPES: readonly Scope[] = [
   "turnero:cupones",
   "turnero:email",
   "turnero:puntos",
+  "turnero:agenda",
   "turnero:productos",
   "landing:ranking",
 ] as const;
@@ -49,6 +51,7 @@ export const ROLE_SCOPES: Record<Role, readonly Scope[]> = {
   manager: [
     "turnero:configuracion",
     "turnero:dashboard",
+    "turnero:agenda",
     "turnero:sucursales",
     "turnero:equipo",
     "turnero:clientes",
@@ -57,7 +60,7 @@ export const ROLE_SCOPES: Record<Role, readonly Scope[]> = {
     "turnero:puntos",
     "turnero:productos",
   ],
-  employee: ["turnero:dashboard", "turnero:equipo", "turnero:productos"],
+  employee: ["turnero:dashboard", "turnero:agenda", "turnero:equipo", "turnero:productos"],
 };
 
 export function hasScope(role: Role, scope: Scope): boolean {
