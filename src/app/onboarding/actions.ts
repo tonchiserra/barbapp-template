@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getDefaultRoute } from "@/lib/permissions";
 import type { Role } from "@/lib/permissions";
 
-export async function onboardStaff(formData: FormData) {
+export async function onboardStaff(_prevState: { error: string } | null, formData: FormData) {
   const supabase = await createClient();
   const {
     data: { user },

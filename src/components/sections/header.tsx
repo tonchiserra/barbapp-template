@@ -65,7 +65,7 @@ export function Header({ settings, className }: HeaderProps) {
               <Link
                 key={i}
                 href={link.url}
-                variant={link.url === "#Turnero" ? "default" : "muted"}
+                variant={link.url === "#turnero" ? "default" : "muted"}
                 className="px-3"
               >
                 {link.label}

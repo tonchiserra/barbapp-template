@@ -23,8 +23,18 @@ const COLOR_FIELDS: { key: keyof ThemeSettings; label: string; description: stri
 
 export function ThemeSettingsForm({ initialSettings }: ThemeSettingsFormProps) {
   const { toast } = useToast();
-  const [pending, setPending] = React.useState(false);
   const [colors, setColors] = React.useState<ThemeSettings>(initialSettings);
+
+  const [state, formAction, pending] = React.useActionState(
+    saveThemeSettings,
+    null,
+  );
+
+  React.useEffect(() => {
+    if (!state) return;
+    if (state.success) toast("Estilos guardados", "success");
+    else if (state.error) toast(state.error, "error");
+  }, [state, toast]);
 
   const updateColor = (key: keyof ThemeSettings, value: string) => {
     setColors((prev) => ({ ...prev, [key]: value }));
@@ -34,28 +44,11 @@ export function ThemeSettingsForm({ initialSettings }: ThemeSettingsFormProps) {
     setColors(DEFAULT_THEME_SETTINGS);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPending(true);
-
-    const fd = new FormData();
-    fd.set("background", colors.background);
-    fd.set("foreground", colors.foreground);
-    fd.set("primary", colors.primary);
-    fd.set("secondary", colors.secondary);
-
-    const result = await saveThemeSettings(null, fd);
-    setPending(false);
-
-    if (result.success) {
-      toast("Estilos guardados", "success");
-    } else if (result.error) {
-      toast(result.error, "error");
-    }
-  };
-
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+    <form action={formAction} className="flex flex-col gap-6">
+      {COLOR_FIELDS.map(({ key }) => (
+        <input key={key} type="hidden" name={key} value={colors[key]} />
+      ))}
       <Card>
         <CardHeader>
           <Heading as="h3" className="text-base">Colores del tema</Heading>

@@ -21,14 +21,7 @@ import {
 } from "@/components/ui";
 import { saveVideoSettings, type SaveVideoState } from "../actions";
 import type { VideoSettings, ButtonVariant } from "@/types";
-
-const CTA_VARIANTS: { value: ButtonVariant; label: string }[] = [
-  { value: "primary", label: "Primary" },
-  { value: "secondary", label: "Secondary" },
-  { value: "outline", label: "Outline" },
-  { value: "ghost", label: "Ghost" },
-  { value: "destructive", label: "Destructive" },
-];
+import { CTA_VARIANTS } from "../constants";
 
 interface VideoSettingsProps {
   initialSettings: VideoSettings;

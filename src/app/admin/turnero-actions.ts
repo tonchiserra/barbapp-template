@@ -5,7 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { sendCompletionEmail } from "@/lib/email";
 import { getEmailSettings } from "@/lib/queries/site-settings";
 import { getAuthSession, canAccessStaff } from "@/lib/auth";
-import type { AppointmentStatus, PaymentMethod, ServiceSpecialPrice, Reward, PointRedemption, Product, ProductSaleWithDetails } from "@/types";
+import { getAllServicesForStaff, getServicesForStaff } from "@/lib/queries/services";
+import { getAvailableSlots } from "@/lib/queries/appointments";
+import { getStaffSchedule } from "@/lib/queries/staff";
+import { getActiveBranches } from "@/lib/queries/branches";
+import type { AppointmentStatus, PaymentMethod, ServiceSpecialPrice, Reward, PointRedemption, Product, ProductSaleWithDetails, Service, Branch } from "@/types";
 
 export interface ActionState {
   error?: string;
@@ -645,8 +649,7 @@ export async function rescheduleAppointment(
 
 export async function getAllServicesForStaffAction(
   staffId: string,
-): Promise<import("@/types").Service[]> {
-  const { getAllServicesForStaff } = await import("@/lib/queries/services");
+): Promise<Service[]> {
   return getAllServicesForStaff(staffId);
 }
 
@@ -657,7 +660,6 @@ export async function getAllServicesForStaffAction(
 export async function getServicesForStaffAction(
   staffId: string,
 ): Promise<{ id: string; name: string; description: string; duration_minutes: number; price_transfer: number; price_cash: number }[]> {
-  const { getServicesForStaff } = await import("@/lib/queries/services");
   const services = await getServicesForStaff(staffId);
   return services.map((s) => ({
     id: s.id,
@@ -674,14 +676,12 @@ export async function getAvailableSlotsAction(
   serviceId: string,
   date: string,
 ): Promise<{ slot_time: string }[]> {
-  const { getAvailableSlots } = await import("@/lib/queries/appointments");
   return getAvailableSlots(staffId, serviceId, date);
 }
 
 export async function getStaffScheduleAction(
   staffId: string,
 ): Promise<{ day_of_week: number; is_working: boolean }[]> {
-  const { getStaffSchedule } = await import("@/lib/queries/staff");
   const schedules = await getStaffSchedule(staffId);
   return schedules.map((s) => ({ day_of_week: s.day_of_week, is_working: s.is_working }));
 }
@@ -1133,8 +1133,7 @@ export async function deleteBranch(branchId: string): Promise<ActionState> {
 }
 
 // Public: get active branches
-export async function getActiveBranchesAction(): Promise<import("@/types").Branch[]> {
-  const { getActiveBranches } = await import("@/lib/queries/branches");
+export async function getActiveBranchesAction(): Promise<Branch[]> {
   return getActiveBranches();
 }
 

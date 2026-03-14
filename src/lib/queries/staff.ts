@@ -1,7 +1,8 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { StaffMember, StaffSchedule, StaffTimeOff, StaffBlockedTime } from "@/types";
 
-export async function getStaff(): Promise<StaffMember[]> {
+export const getStaff = cache(async (): Promise<StaffMember[]> => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("staff")
@@ -10,9 +11,9 @@ export async function getStaff(): Promise<StaffMember[]> {
     .order("sort_order");
 
   return (data as StaffMember[]) ?? [];
-}
+});
 
-export async function getActiveStaff(): Promise<StaffMember[]> {
+export const getActiveStaff = cache(async (): Promise<StaffMember[]> => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("staff")
@@ -22,7 +23,7 @@ export async function getActiveStaff(): Promise<StaffMember[]> {
     .order("sort_order");
 
   return (data as StaffMember[]) ?? [];
-}
+});
 
 export async function getStaffForBranch(branchId: string): Promise<StaffMember[]> {
   const supabase = await createClient();
@@ -47,7 +48,7 @@ export async function getStaffMember(staffId: string): Promise<StaffMember | nul
   return (data as StaffMember) ?? null;
 }
 
-export async function getStaffSchedule(staffId: string): Promise<StaffSchedule[]> {
+export const getStaffSchedule = cache(async (staffId: string): Promise<StaffSchedule[]> => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("staff_schedules")
@@ -56,9 +57,9 @@ export async function getStaffSchedule(staffId: string): Promise<StaffSchedule[]
     .order("day_of_week");
 
   return (data as StaffSchedule[]) ?? [];
-}
+});
 
-export async function getAllStaffSchedules(): Promise<StaffSchedule[]> {
+export const getAllStaffSchedules = cache(async (): Promise<StaffSchedule[]> => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("staff_schedules")
@@ -66,9 +67,9 @@ export async function getAllStaffSchedules(): Promise<StaffSchedule[]> {
     .order("day_of_week");
 
   return (data as StaffSchedule[]) ?? [];
-}
+});
 
-export async function getAllStaffTimeOff(): Promise<StaffTimeOff[]> {
+export const getAllStaffTimeOff = cache(async (): Promise<StaffTimeOff[]> => {
   const supabase = await createClient();
   const today = new Date().toISOString().split("T")[0];
   const { data } = await supabase
@@ -78,9 +79,9 @@ export async function getAllStaffTimeOff(): Promise<StaffTimeOff[]> {
     .order("date");
 
   return (data as StaffTimeOff[]) ?? [];
-}
+});
 
-export async function getAllStaffBlockedTimes(): Promise<StaffBlockedTime[]> {
+export const getAllStaffBlockedTimes = cache(async (): Promise<StaffBlockedTime[]> => {
   const supabase = await createClient();
   const today = new Date().toISOString().split("T")[0];
   const { data } = await supabase
@@ -91,4 +92,4 @@ export async function getAllStaffBlockedTimes(): Promise<StaffBlockedTime[]> {
     .order("start_time");
 
   return (data as StaffBlockedTime[]) ?? [];
-}
+});

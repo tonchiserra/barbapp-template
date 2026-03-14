@@ -22,19 +22,12 @@ import {
 import { saveCarouselSettings, type SaveCarouselState } from "../actions";
 import type { CarouselSettings, CarouselSlide, ButtonVariant, HAlign, VAlign } from "@/types";
 import { DEFAULT_CAROUSEL_SLIDE } from "@/types";
+import { CTA_VARIANTS } from "../constants";
 
 interface CarouselSettingsProps {
   userId: string;
   initialSettings: CarouselSettings;
 }
-
-const CTA_VARIANTS: { value: ButtonVariant; label: string }[] = [
-  { value: "primary", label: "Primary" },
-  { value: "secondary", label: "Secondary" },
-  { value: "outline", label: "Outline" },
-  { value: "ghost", label: "Ghost" },
-  { value: "destructive", label: "Destructive" },
-];
 
 const H_ALIGNS: { value: HAlign; label: string }[] = [
   { value: "left", label: "Izquierda" },

@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-export async function login(formData: FormData) {
+export async function login(_prevState: { error: string } | null, formData: FormData) {
   const supabase = await createClient();
 
   const email = formData.get("email") as string;
@@ -15,7 +15,7 @@ export async function login(formData: FormData) {
   });
 
   if (error) {
-    return { error: error.message };
+    return { error: "Email o contraseña incorrectos" };
   }
 
   redirect("/admin");

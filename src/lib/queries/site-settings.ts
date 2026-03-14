@@ -1,8 +1,9 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { SiteSettings, HeaderSettings, FooterSettings, CarouselSettings, VideoSettings, GallerySettings, MulticolumnSettings, MapSettings, BookingSettings, ThemeSettings, EmailSettings, RankingSettings } from "@/types";
 import { DEFAULT_HEADER_SETTINGS, DEFAULT_FOOTER_SETTINGS, DEFAULT_CAROUSEL_SETTINGS, DEFAULT_VIDEO_SETTINGS, DEFAULT_GALLERY_SETTINGS, DEFAULT_MULTICOLUMN_SETTINGS, DEFAULT_MAP_SETTINGS, DEFAULT_BOOKING_SETTINGS, DEFAULT_THEME_SETTINGS, DEFAULT_EMAIL_SETTINGS, DEFAULT_RANKING_SETTINGS } from "@/types";
 
-export async function getSiteSettings(): Promise<SiteSettings | null> {
+export const getSiteSettings = cache(async (): Promise<SiteSettings | null> => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("site_settings")
@@ -11,7 +12,7 @@ export async function getSiteSettings(): Promise<SiteSettings | null> {
     .single();
 
   return (data as SiteSettings) ?? null;
-}
+});
 
 export async function getHeaderSettings(): Promise<HeaderSettings> {
   const settings = await getSiteSettings();

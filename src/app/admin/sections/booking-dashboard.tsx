@@ -3,7 +3,6 @@
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { format as fnsFormat, subMonths, addDays } from "date-fns";
-import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import {
@@ -111,7 +110,7 @@ function NextAppointmentCard({ appointment }: { appointment: AppointmentWithDeta
     );
   }
 
-  const dateStr = format(new Date(appointment.date + "T00:00:00"), "EEEE d 'de' MMMM", { locale: es });
+  const dateStr = fnsFormat(new Date(appointment.date + "T00:00:00"), "EEEE d 'de' MMMM", { locale: es });
   const timeStr = appointment.start_time.slice(0, 5);
 
   return (

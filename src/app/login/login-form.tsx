@@ -13,17 +13,12 @@ import {
 import { login } from "./actions";
 
 export function LoginForm({ accessError }: { accessError?: string }) {
-  const [state, formAction, pending] = useActionState(
-    async (_prev: { error: string } | null, formData: FormData) => {
-      return await login(formData);
-    },
-    null,
-  );
+  const [state, formAction, pending] = useActionState(login, null);
 
   const errorMessage = state?.error || accessError;
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <div className="flex min-h-[100dvh] items-center justify-center px-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
           <Heading as="h1" className="text-2xl">

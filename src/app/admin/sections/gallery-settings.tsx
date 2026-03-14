@@ -22,16 +22,9 @@ import {
 } from "@/components/ui";
 import { saveGallerySettings, type SaveGalleryState } from "../actions";
 import type { GallerySettings, ButtonVariant } from "@/types";
+import { CTA_VARIANTS } from "../constants";
 
 const MAX_IMAGES = 9;
-
-const CTA_VARIANTS: { value: ButtonVariant; label: string }[] = [
-  { value: "primary", label: "Primary" },
-  { value: "secondary", label: "Secondary" },
-  { value: "outline", label: "Outline" },
-  { value: "ghost", label: "Ghost" },
-  { value: "destructive", label: "Destructive" },
-];
 
 interface GallerySettingsProps {
   userId: string;

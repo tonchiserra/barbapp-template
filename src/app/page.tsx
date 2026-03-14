@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Header } from "@/components/sections/header";
 import { Footer } from "@/components/sections/footer";
 import { Carousel } from "@/components/sections/carousel";
@@ -28,27 +29,33 @@ export default async function Home() {
     <>
       <style dangerouslySetInnerHTML={{ __html: themeCss }} />
       <Header settings={headerSettings} />
-      <AnimateOnScroll>
-        <Booking />
-      </AnimateOnScroll>
-      <AnimateOnScroll>
-        <Carousel settings={carouselSettings} />
-      </AnimateOnScroll>
-      <AnimateOnScroll>
-        <Video settings={videoSettings} />
-      </AnimateOnScroll>
-      <AnimateOnScroll>
-        <Gallery settings={gallerySettings} />
-      </AnimateOnScroll>
-      <AnimateOnScroll>
-        <Multicolumn settings={multicolumnSettings} />
-      </AnimateOnScroll>
-      <AnimateOnScroll>
-        <Map settings={mapSettings} />
-      </AnimateOnScroll>
-      <AnimateOnScroll>
-        <Ranking />
-      </AnimateOnScroll>
+      <main>
+        <Suspense>
+          <AnimateOnScroll>
+            <Booking />
+          </AnimateOnScroll>
+        </Suspense>
+        <AnimateOnScroll>
+          <Carousel settings={carouselSettings} />
+        </AnimateOnScroll>
+        <AnimateOnScroll>
+          <Video settings={videoSettings} />
+        </AnimateOnScroll>
+        <AnimateOnScroll>
+          <Gallery settings={gallerySettings} />
+        </AnimateOnScroll>
+        <AnimateOnScroll>
+          <Multicolumn settings={multicolumnSettings} />
+        </AnimateOnScroll>
+        <AnimateOnScroll>
+          <Map settings={mapSettings} />
+        </AnimateOnScroll>
+        <Suspense>
+          <AnimateOnScroll>
+            <Ranking />
+          </AnimateOnScroll>
+        </Suspense>
+      </main>
       <AnimateOnScroll>
         <Footer settings={footerSettings} />
       </AnimateOnScroll>

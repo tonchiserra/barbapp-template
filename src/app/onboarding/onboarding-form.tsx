@@ -20,15 +20,10 @@ import type { Branch } from "@/types";
 
 export function OnboardingForm({ branches }: { branches: Branch[] }) {
   const [branchId, setBranchId] = useState("");
-  const [state, formAction, pending] = useActionState(
-    async (_prev: { error: string } | null, formData: FormData) => {
-      return await onboardStaff(formData);
-    },
-    null,
-  );
+  const [state, formAction, pending] = useActionState(onboardStaff, null);
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <div className="flex min-h-[100dvh] items-center justify-center px-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
           <Heading as="h1" className="text-2xl">

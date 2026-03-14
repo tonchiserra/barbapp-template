@@ -365,7 +365,7 @@ function SalesHistoryDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[80dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Historial de ventas</DialogTitle>
           <DialogDescription>{total} ventas registradas</DialogDescription>
