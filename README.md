@@ -13,6 +13,7 @@ Plataforma para una barberia o peluqueria. El dueno personaliza su landing page 
 | Deploy | Vercel |
 | Lenguaje | TypeScript strict |
 | Paquetes | npm |
+| Graficos | recharts (BarChart, LineChart) |
 | Fechas | date-fns (locale es-AR) |
 
 ## Setup
@@ -83,7 +84,8 @@ src/
 │   ├── ui-kit/                   # Referencia visual de componentes
 │   └── admin/                    # Panel de administracion (protegido)
 │       ├── admin-shell.tsx       # Layout con sidebar de navegacion
-│       ├── dashboard/            # Metricas, caja (comisiones), agenda, historico
+│       ├── dashboard/            # Metricas, caja (comisiones), historico, graficos
+│       ├── agenda/               # Turnos y gestion de citas (7 dias)
 │       ├── header/               # Logo, menu, redes sociales
 │       ├── footer/               # Links y redes del footer
 │       ├── carousel/             # Carrusel de imagenes hero
@@ -151,7 +153,7 @@ Accesible en `/admin/*`, protegido por middleware de autenticacion y sistema de 
 
 **Secciones de landing:** Header, Carrusel, Video, Galeria, Multicolumna, Mapa, Ranking, Footer, Estilos. *(solo admin/owner)*
 
-**Gestion del negocio:** Configuracion, Dashboard, Sucursales, Equipo, Clientes, Cupones, Puntos, Productos, Email. *(visibilidad segun rol)*
+**Gestion del negocio:** Configuracion, Dashboard, Agenda, Sucursales, Equipo, Clientes, Cupones, Puntos, Productos, Email. *(visibilidad segun rol)*
 
 ---
 
@@ -235,6 +237,7 @@ Las secciones del admin estan protegidas por scopes. Cada rol tiene un conjunto 
 | landing:* (header, carousel, video, gallery, multicolumn, mapa, ranking, footer, estilos) | si | si | no | no |
 | turnero:configuracion | si | si | si | no |
 | turnero:dashboard | si | si | si* | si* |
+| turnero:agenda | si | si | si* | si* |
 | turnero:sucursales | si | si | si | no |
 | turnero:equipo | si | si | si** | si** |
 | turnero:clientes | si | si | si | no |
@@ -243,7 +246,7 @@ Las secciones del admin estan protegidas por scopes. Cada rol tiene un conjunto 
 | turnero:productos | si | si | si | si |
 | turnero:email | si | si | si | no |
 
-*\*dashboard: employee ve solo sus turnos, manager ve turnos de su sucursal*
+*\*dashboard/agenda: employee ve solo sus turnos, manager ve turnos de su sucursal*
 *\*\*equipo: employee solo accede a su perfil, manager solo a staff de su sucursal*
 
 ### Crear un usuario
@@ -384,13 +387,25 @@ Soporte multi-sucursal para negocios con mas de una ubicacion:
 
 ## Dashboard
 
-Vista general del negocio con filtros por sucursal y empleado (owner/admin):
+Vista de metricas e ingresos del negocio con filtros por sucursal y empleado (owner/admin):
 
 - **Metricas:** Turnos y ingresos del dia, semana y mes. Comparativa porcentual vs periodo anterior.
 - **Caja:** Desglose por empleado con tabs Hoy/Semana/Mes. Muestra turnos completados, ingreso en efectivo y transferencia, comision del empleado y neto para el dueno. Fila de totales al final.
-- **Agenda:** 7 dias con tabs. Turnos con controles de estado (completar, cancelar, no asistio). Proximo turno destacado.
-- **Historico:** Selector de mes para ver metricas de meses anteriores.
-- **Filtros por rol:** Employee ve solo sus turnos, manager ve turnos de su sucursal, owner/admin ve todo con filtros de sucursal y empleado.
+- **Historico:** Tabla con los ultimos 12 meses mostrando turnos totales, completados e ingresos. Se actualiza reactivamente con los filtros.
+- **Graficos:** Grafico de barras (turnos por mes) y grafico de linea (ingresos por mes) de los ultimos 12 meses. Usa recharts con carga dinamica (`next/dynamic`, sin SSR).
+- **Filtros por rol:** Employee ve solo sus datos, manager ve datos de su sucursal, owner/admin ve todo con filtros de sucursal y empleado.
+
+---
+
+## Agenda
+
+Gestion de turnos y citas con vista de 7 dias:
+
+- **Proximo turno:** Card destacada con el siguiente turno confirmado del dia.
+- **Vista por dia:** 7 tabs (uno por dia) con lista de turnos ordenados cronologicamente.
+- **Acciones:** Completar (con selector de metodo de pago), cancelar, marcar no asistio, editar (servicio, fecha, horario), revertir a confirmado.
+- **Filtros compartidos:** Mismos filtros de sucursal y empleado que el dashboard, extraidos a un hook reutilizable (`useStaffFilters`).
+- **Filtros por rol:** Employee ve solo sus turnos, manager ve turnos de su sucursal, owner/admin ve todo.
 
 ---
 
