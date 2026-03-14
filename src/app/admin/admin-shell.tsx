@@ -315,7 +315,7 @@ export function AdminShell({ children, session }: { children: React.ReactNode; s
   const currentSection = ALL_SECTIONS.find((s) => pathname === s.href);
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="fixed inset-0 flex flex-col">
       {/* Mobile header */}
       <div className="flex items-center gap-3 border-b px-4 py-3 lg:hidden">
         <button
