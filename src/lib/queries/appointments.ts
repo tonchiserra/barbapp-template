@@ -101,3 +101,20 @@ export async function getAvailableSlots(
 
   return (data as AvailableSlot[]) ?? [];
 }
+
+export async function getFullyBookedDates(
+  staffId: string,
+  serviceId: string,
+  startDate: string,
+  endDate: string,
+): Promise<string[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("get_fully_booked_dates", {
+    p_staff_id: staffId,
+    p_service_id: serviceId,
+    p_start_date: startDate,
+    p_end_date: endDate,
+  });
+
+  return (data as { booked_date: string }[] ?? []).map((row) => row.booked_date);
+}

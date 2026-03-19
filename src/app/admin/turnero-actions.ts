@@ -6,7 +6,7 @@ import { sendCompletionEmail } from "@/lib/email";
 import { getEmailSettings } from "@/lib/queries/site-settings";
 import { getAuthSession, canAccessStaff } from "@/lib/auth";
 import { getAllServicesForStaff, getServicesForStaff } from "@/lib/queries/services";
-import { getAvailableSlots } from "@/lib/queries/appointments";
+import { getAvailableSlots, getFullyBookedDates } from "@/lib/queries/appointments";
 import { getStaffSchedule } from "@/lib/queries/staff";
 import { getActiveBranches } from "@/lib/queries/branches";
 import type { AppointmentStatus, PaymentMethod, ServiceSpecialPrice, Reward, PointRedemption, Product, ProductSaleWithDetails, Service, Branch } from "@/types";
@@ -677,6 +677,15 @@ export async function getAvailableSlotsAction(
   date: string,
 ): Promise<{ slot_time: string }[]> {
   return getAvailableSlots(staffId, serviceId, date);
+}
+
+export async function getFullyBookedDatesAction(
+  staffId: string,
+  serviceId: string,
+  startDate: string,
+  endDate: string,
+): Promise<string[]> {
+  return getFullyBookedDates(staffId, serviceId, startDate, endDate);
 }
 
 export async function getStaffScheduleAction(

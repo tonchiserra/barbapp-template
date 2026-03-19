@@ -7,6 +7,7 @@ import { Button, Input, Heading, Text } from "@/components/ui";
 import {
   getServicesForStaffAction,
   getAvailableSlotsAction,
+  getFullyBookedDatesAction,
   getStaffScheduleAction,
   getStaffTimeOffDatesAction,
   createAppointment,
@@ -63,6 +64,9 @@ export function BookingWidget({ settings, staff: initialStaff, branches }: Booki
   const [availableSlots, setAvailableSlots] = React.useState<string[]>([]);
   const [staffSchedule, setStaffSchedule] = React.useState<{ day_of_week: number; is_working: boolean }[]>([]);
   const [staffTimeOffDates, setStaffTimeOffDates] = React.useState<string[]>([]);
+  const [fullyBookedDates, setFullyBookedDates] = React.useState<Set<string>>(new Set());
+  const [loadingDates, setLoadingDates] = React.useState(false);
+  const fetchIdRef = React.useRef(0);
   const [loading, setLoading] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -96,6 +100,16 @@ export function BookingWidget({ settings, staff: initialStaff, branches }: Booki
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function fetchFullyBooked(startDate: string, endDate: string) {
+    if (!selectedStaff || !selectedService) return;
+    const id = ++fetchIdRef.current;
+    setLoadingDates(true);
+    const dates = await getFullyBookedDatesAction(selectedStaff.id, selectedService.id, startDate, endDate);
+    if (id !== fetchIdRef.current) return;
+    setFullyBookedDates(new Set(dates));
+    setLoadingDates(false);
+  }
+
   // --- Step handlers ---
 
   function handleSelectBranch(branch: Branch) {
@@ -118,6 +132,7 @@ export function BookingWidget({ settings, staff: initialStaff, branches }: Booki
     setSelectedDate(null);
     setSelectedTime(null);
     setSpecialPrice(null);
+    setFullyBookedDates(new Set());
     setStep("service");
     setLoading(true);
 
@@ -251,6 +266,7 @@ export function BookingWidget({ settings, staff: initialStaff, branches }: Booki
     setDiscountCode("");
     setAppliedDiscount(null);
     setDiscountError("");
+    setFullyBookedDates(new Set());
 
     // Auto-select if only 1 staff (and no branch step)
     if (!showBranchStep && initialStaff.length === 1) {
@@ -387,8 +403,11 @@ export function BookingWidget({ settings, staff: initialStaff, branches }: Booki
               minAdvanceHours={selectedStaff?.min_advance_hours ?? 2}
               staffSchedule={staffSchedule}
               staffTimeOffDates={staffTimeOffDates}
+              fullyBookedDates={fullyBookedDates}
+              loadingDates={loadingDates}
               selectedDate={selectedDate}
               onSelect={handleSelectDate}
+              onMonthChange={fetchFullyBooked}
               loading={loading}
             />
           )}
@@ -566,8 +585,11 @@ function DateStep({
   minAdvanceHours,
   staffSchedule,
   staffTimeOffDates,
+  fullyBookedDates,
+  loadingDates,
   selectedDate,
   onSelect,
+  onMonthChange,
   loading,
 }: {
   agendaStartDate: string | null;
@@ -575,11 +597,22 @@ function DateStep({
   minAdvanceHours: number;
   staffSchedule: { day_of_week: number; is_working: boolean }[];
   staffTimeOffDates: string[];
+  fullyBookedDates: Set<string>;
+  loadingDates: boolean;
   selectedDate: Date | null;
   onSelect: (d: Date) => void;
+  onMonthChange: (startDate: string, endDate: string) => void;
   loading: boolean;
 }) {
   const [currentMonth, setCurrentMonth] = React.useState(new Date());
+
+  // Fetch fully booked dates on mount and month change
+  React.useEffect(() => {
+    const start = format(startOfMonth(currentMonth), "yyyy-MM-dd");
+    const end = format(endOfMonth(currentMonth), "yyyy-MM-dd");
+    onMonthChange(start, end);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -605,6 +638,8 @@ function DateStep({
       const hoursLeft = 24 - now.getHours() - now.getMinutes() / 60;
       if (hoursLeft < minAdvanceHours) return true;
     }
+    // Check if all slots are booked
+    if (fullyBookedDates.has(format(date, "yyyy-MM-dd"))) return true;
     return false;
   }
 
@@ -628,7 +663,11 @@ function DateStep({
         {/* Month navigation */}
         <div className="mb-3 flex items-center justify-between">
           <button
-            onClick={() => setCurrentMonth((m) => addMonths(m, -1))}
+            onClick={() => {
+              const newMonth = addMonths(currentMonth, -1);
+              setCurrentMonth(newMonth);
+              onMonthChange(format(startOfMonth(newMonth), "yyyy-MM-dd"), format(endOfMonth(newMonth), "yyyy-MM-dd"));
+            }}
             disabled={!canPrevMonth}
             className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent disabled:opacity-30"
           >
@@ -640,7 +679,11 @@ function DateStep({
             {format(currentMonth, "MMMM yyyy", { locale: es })}
           </Text>
           <button
-            onClick={() => setCurrentMonth((m) => addMonths(m, 1))}
+            onClick={() => {
+              const newMonth = addMonths(currentMonth, 1);
+              setCurrentMonth(newMonth);
+              onMonthChange(format(startOfMonth(newMonth), "yyyy-MM-dd"), format(endOfMonth(newMonth), "yyyy-MM-dd"));
+            }}
             disabled={!canNextMonth}
             className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent disabled:opacity-30"
           >
@@ -649,6 +692,10 @@ function DateStep({
             </svg>
           </button>
         </div>
+
+        {loadingDates && (
+          <Text size="sm" variant="muted" className="mb-1 text-center animate-pulse">Verificando disponibilidad...</Text>
+        )}
 
         {/* Day headers */}
         <div className="grid grid-cols-7 gap-1 text-center">
@@ -661,7 +708,7 @@ function DateStep({
         <div className="grid grid-cols-7 gap-1">
           {days.map((day) => {
             const inMonth = isSameMonth(day, currentMonth);
-            const disabled = !inMonth || isDateDisabled(day);
+            const disabled = !inMonth || isDateDisabled(day) || loadingDates;
             const selected = selectedDate && isSameDay(day, selectedDate);
             const isToday = isSameDay(day, today);
 
