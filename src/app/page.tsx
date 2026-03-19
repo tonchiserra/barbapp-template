@@ -35,6 +35,11 @@ export default async function Home() {
             <Booking />
           </AnimateOnScroll>
         </Suspense>
+        <Suspense>
+          <AnimateOnScroll>
+            <Ranking />
+          </AnimateOnScroll>
+        </Suspense>
         <AnimateOnScroll>
           <Carousel settings={carouselSettings} />
         </AnimateOnScroll>
@@ -50,11 +55,7 @@ export default async function Home() {
         <AnimateOnScroll>
           <Map settings={mapSettings} />
         </AnimateOnScroll>
-        <Suspense>
-          <AnimateOnScroll>
-            <Ranking />
-          </AnimateOnScroll>
-        </Suspense>
+        
       </main>
       <AnimateOnScroll>
         <Footer settings={footerSettings} />

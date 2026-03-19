@@ -11,7 +11,7 @@ export async function Ranking({ className }: RankingProps) {
   const settings = await getRankingSettings();
   if (!settings.is_visible) return null;
 
-  const entries = await getPublicRanking(100);
+  const entries = await getPublicRanking(30);
   if (entries.length === 0) return null;
 
   const maxPoints = entries[0].client_points;
@@ -43,7 +43,7 @@ export async function Ranking({ className }: RankingProps) {
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="flex items-center justify-between">
                     <span className="truncate text-sm font-medium">{entry.client_name}</span>
-                    <span className="shrink-0 text-sm font-semibold text-primary">
+                    <span className="shrink-0 text-sm font-semibold">
                       {entry.client_points} pts
                     </span>
                   </div>
